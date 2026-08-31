@@ -17,3 +17,5 @@ shiori-core = { path = "../crates/shiori-core" }
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
+log = "0.4"
+libc = "0.2"

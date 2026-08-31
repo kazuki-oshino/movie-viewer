@@ -1,6 +1,12 @@
 [workspace]
 members = ["crates/shiori-core", "src-tauri"]
+exclude = ["vendor/wry-0.55.1", "vendor/tauri-2.11.5"]
 resolver = "2"
+
+# 再生確認済みのRange上限変更と診断ログを再現する。詳細はvendor/README.md。
+[patch.crates-io]
+wry = { path = "vendor/wry-0.55.1" }
+tauri = { path = "vendor/tauri-2.11.5" }
 
 [workspace.package]
 version = "0.1.0"

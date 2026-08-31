@@ -61,18 +61,18 @@ export function mediaDiagnostics(
   events: readonly string[],
 ): string {
   const error = video.error;
-  const message = error?.message?.trim();
   const scheme = /^(asset|file|https?|blob|data):/iu.exec(
     video.currentSrc || video.src,
   )?.[0];
   return [
-    'Shiori playback diagnostics v2',
+    'Shiori playback diagnostics v4 (raw; rangeLimit=8388608)',
     `error.code: ${error ? namedState(error.code, ERROR_NAMES) : 'none (MediaErrorなし)'}`,
     `error.message: ${
-      message
-        ? redactMediaMessage(message, [source.path, video.currentSrc, video.src])
-        : '（WebViewから詳細メッセージは提供されていません）'
+      JSON.stringify(error?.message ?? null)
     }`,
+    `sourcePath: ${source.path}`,
+    `currentSrc: ${video.currentSrc}`,
+    `src: ${video.src}`,
     `networkState: ${namedState(video.networkState, NETWORK_NAMES)}`,
     `readyState: ${namedState(video.readyState, READY_NAMES)}`,
     `currentTime: ${seconds(video.currentTime)}`,

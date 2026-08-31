@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { collectAssetDiagnostics } from './assetDiagnostics';
+import { invoke } from '@tauri-apps/api/core';
 
 export function MediaErrorDetails({
   diagnostics,
@@ -42,10 +43,21 @@ export function MediaErrorDetails({
       if (!controller.signal.aborted)
         setTransport({ snapshot: diagnostics, sourceUrl, sourcePath, report });
     };
-    void collectAssetDiagnostics(sourceUrl, sourcePath, controller.signal).then(
-      finish,
-      () => finish('assetProbe: unavailable (追加診断を完了できませんでした)'),
-    );
+    void (async () => {
+      let probe: string;
+      try {
+        probe = await collectAssetDiagnostics(sourceUrl, sourcePath, controller.signal);
+      } catch (error) {
+        probe = `assetProbe.error: ${String(error)}`;
+      }
+      if (controller.signal.aborted) return;
+      try {
+        const native = await invoke<string>('playback_diagnostics', { frontend: diagnostics });
+        finish(`${probe}\n\n${native}`);
+      } catch (error) {
+        finish(`${probe}\n\nnativeLog.error: ${String(error)}`);
+      }
+    })();
     return () => controller.abort();
   }, [diagnostics, sourceUrl, sourcePath, isNative]);
 
@@ -80,7 +92,7 @@ export function MediaErrorDetails({
       />
       <small role="status">
         {collecting && '配信情報を確認中です…（最大5秒）。'}
-        ファイル名・保存パスは伏せています。この詳細だけを共有してください。
+        診断版：ファイル名・保存パスを含む未加工ログです。共有前に必要な箇所を伏せてください。
       </small>
     </div>
   );
