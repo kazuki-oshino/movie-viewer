@@ -1,0 +1,19 @@
+[package]
+name = "shiori"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "shiori"
+
+[lib]
+name = "shiori_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+shiori-core = { path = "../crates/shiori-core" }
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }

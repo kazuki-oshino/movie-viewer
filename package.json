@@ -1,0 +1,43 @@
+{
+  "name": "shiori",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "tauri": "tauri",
+    "app:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "app:build": "tauri build --bundles app",
+    "app:build:dev": "tauri build --config src-tauri/tauri.dev.conf.json --bundles app",
+    "test": "vitest run",
+    "test:rust": "cargo test -p shiori-core",
+    "check": "npm run build && npm test && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "prettier --write src scripts index.html *.json *.ts docs README.md && cargo fmt --all",
+    "format:check": "prettier --check src scripts index.html *.json *.ts docs README.md && cargo fmt --all -- --check",
+    "fixture": "node scripts/create-fixture.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

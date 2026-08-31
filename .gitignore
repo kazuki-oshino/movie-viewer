@@ -1,0 +1,15 @@
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/icon.ico
+.DS_Store
+.tmp/
+.env
+.env.*
+!.env.example
