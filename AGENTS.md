@@ -2,7 +2,17 @@
 
 ## リポジトリの目的
 
-- TODO
+- Shioriは、Rust、Tauri 2、React、TypeScriptで構成するmacOS向けのローカル動画ビューワーである。
+- 元動画を変更せず、動画の登録情報、再生位置、しおり、メモ、サムネイルをアプリ専用領域へ保存する。
+- クラウド同期やアカウント機能を持たず、ユーザーのデータをローカルで扱う。
+
+## 構成と責務
+
+- `src/`: Reactフロントエンド。画面、操作、表示用の状態を扱う。
+- `src-tauri/`: Tauriアプリ。ウィンドウ、ファイル選択、IPC、終了処理を扱う。
+- `crates/shiori-core/`: 保存契約、動画照合、メタデータ、サムネイル管理を扱う。
+- `public/demo/`: ブラウザプレビューと検証に使用する自作デモ素材を置く。
+- `vendor/`: 再生修正と診断のために変更したTauriとWryのソースを置く。変更理由と上流との差分は`vendor/README.md`を正とする。
 
 ## 思考と判断のルール
 
@@ -15,22 +25,20 @@
 
 - 思考は英語でよいが、ユーザーへの回答とプロジェクト内Markdownは日本語で記述する。
 
-## AI Skills
+## データと検証の安全性
 
-用途に合う場合は、次のskillを自動的に使用する。
+- 開発・検証には`public/demo/`または専用の一時ディレクトリを使用し、個人の動画や通常版の保存領域を使わない。
+- 開発版では`SHIORI_DEV_DATA_DIR`だけを使用し、通常版の`SHIORI_DATA_DIR`を引き継がない。
+- 診断ログにはファイル名やパスが含まれ得るため、実ログやユーザーデータをコミットしない。
+- 動画の登録解除、再指定、しおり削除を変更するときは、元動画を変更・削除しない契約を維持する。
 
-| Skill | Purpose |
-| --- | --- |
-| `create-wordpress-article` | WordPress記事の調査、執筆、HTML化、検証、下書き投稿・更新を行う。 |
-| `create-wordpress-travel-diagnosis` | 旅行先・泊数・宿泊エリアなどの診断を調査・配点設計し、楽天トラベル導線付きのWordPress旅行診断下書きとして作成・検証する。 |
-| `create-affiliate-article-draft` | 指定された提携済み案件からSEO記事タイプと統合方針を判断し、調査、A8リンク生成、約1万字の記事、画像制作、WordPress下書き投稿までを一括で行う。 |
-| `create-demand-first-affiliate-article-draft` | Google Trends・Yahoo!などの需要調査からテーマとSEOキーワードを決め、本文完成後にAmazon・楽天の商品を選び、リンク入り記事をWordPress下書きへ保存する。 |
-| `create-rakuten-affiliate-link` | 楽天公式画面・APIから楽天アフィリエイトリンクを発行し、規約上の改変、遷移先、Affiliate IDを検証する。 |
-| `create-amazon-associate-link` | Amazon公式画面・現行APIから特別リンクを発行し、トラッキングID、ASIN、版、開示を検証する。 |
-| `create-multi-store-affiliate-box` | 同一商品のAmazon・楽天・電子版などの購入ボタンを一つの商品ボックスにまとめて検証する。 |
-| `write-note-essay` | note向け創作エッセイの調査、合成、執筆、見出し画像、入稿、公開確認を行う。 |
-| `write-arisawa-itsuka-essay` | 汎用エッセイスキルを使い、有沢いつかの人格と連作世界を保って記事を制作する。 |
+## 検証
 
+- フロントエンドの変更は`npm test`と`npm run build`で確認する。
+- Rustの変更は`cargo test --workspace`と`cargo clippy --workspace --all-targets -- -D warnings`で確認する。
+- 整形は`npm run format:check`と`cargo fmt --all -- --check`で確認する。
+- ファイル選択、WebKitでの動画再生、終了処理などのネイティブ挙動は、必要に応じて隔離した開発版アプリでも確認する。
+- `vendor/`を変更するときは、対象バージョンの上流ソースとの差分が`vendor/README.md`の記載と一致することを確認する。
 
 ## Git and file operations
 
@@ -38,4 +46,3 @@
 - 生成物とcurated assetをファイル名だけで判定しない。
 - コミット前に `git diff --check` と関連テストを実行する。
 - シークレットや外部サービスの認証情報をコミットしない。
-
