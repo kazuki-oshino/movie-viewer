@@ -98,11 +98,21 @@ export class PreviewGateway implements LibraryGateway {
   }
   async addBookmark(id: string, input: NewBookmark) {
     const video = this.get(id);
-    if (!video.bookmarks.some((bookmark) => bookmark.id === input.id)) {
+    this.validateRange(input.seconds, input.endSeconds, video.duration);
+    const existing = video.bookmarks.find((bookmark) => bookmark.id === input.id);
+    if (existing) {
+      if (
+        Math.abs(existing.seconds - input.seconds) > 0.1 ||
+        (existing.endSeconds ?? null) !== (input.endSeconds ?? null)
+      )
+        throw new Error('同じしおりIDで時刻を変更できません');
+      Object.assign(existing, { note: input.note.trim(), color: input.color });
+    } else {
       video.bookmarks.push({
         id: input.id,
         note: input.note.trim(),
         seconds: input.seconds,
+        endSeconds: input.endSeconds ?? null,
         color: input.color,
         thumbnailId: input.id,
         createdAtMs: Date.now(),
@@ -111,12 +121,30 @@ export class PreviewGateway implements LibraryGateway {
     }
     return structuredClone(video);
   }
-  async editBookmark(id: string, bookmarkId: string, note: string, color: BookmarkColor) {
+  async editBookmark(
+    id: string,
+    bookmarkId: string,
+    note: string,
+    color: BookmarkColor,
+    endSeconds: number | null = null,
+  ) {
     const video = this.get(id);
     const bookmark = video.bookmarks.find((item) => item.id === bookmarkId);
     if (!bookmark) throw new Error('しおりが見つかりません。');
-    Object.assign(bookmark, { note: note.trim(), color });
+    this.validateRange(bookmark.seconds, endSeconds, video.duration);
+    Object.assign(bookmark, { note: note.trim(), color, endSeconds });
     return structuredClone(video);
+  }
+  private validateRange(start: number, end: number | null | undefined, duration: number) {
+    if (
+      end != null &&
+      (!Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start < 0 ||
+        end - start < 0.5 - 1e-9 ||
+        end > duration)
+    )
+      throw new Error('区間は0.5秒以上で、動画の長さ以内にしてください');
   }
   async removeBookmark(id: string, bookmarkId: string) {
     const video = this.get(id);

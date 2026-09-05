@@ -52,8 +52,14 @@ export class TauriGateway implements LibraryGateway {
   addBookmark(id: string, input: NewBookmark) {
     return invoke<VideoEntry>('add_bookmark', { id, input });
   }
-  editBookmark(id: string, bookmarkId: string, note: string, color: BookmarkColor) {
-    return invoke<VideoEntry>('edit_bookmark', { id, bookmarkId, note, color });
+  editBookmark(
+    id: string,
+    bookmarkId: string,
+    note: string,
+    color: BookmarkColor,
+    endSeconds: number | null = null,
+  ) {
+    return invoke<VideoEntry>('edit_bookmark', { id, bookmarkId, note, color, endSeconds });
   }
   removeBookmark(id: string, bookmarkId: string) {
     return invoke<VideoEntry>('remove_bookmark', { id, bookmarkId });

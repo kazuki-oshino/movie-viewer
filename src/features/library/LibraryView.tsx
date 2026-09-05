@@ -19,6 +19,8 @@ import {
 import {
   COLORS,
   formatTime,
+  bookmarkTime,
+  bookmarkAction,
   matchesSearch,
   shelfItems,
   type BookmarkColor,
@@ -34,7 +36,7 @@ interface Props {
   videos: VideoEntry[];
   gateway: LibraryGateway;
   query: string;
-  onOpen(video: VideoEntry, seconds?: number): void;
+  onOpen(video: VideoEntry, seconds?: number, endSeconds?: number | null): void;
   onEdit(item: ShelfItem): void;
   onDelete(item: ShelfItem): void;
   onInfo(video: VideoEntry): void;
@@ -235,14 +237,17 @@ export function LibraryView({
                 <article className="shelf-card" key={item.bookmark.id}>
                   <button
                     className="shelf-card-open"
-                    onClick={() => onOpen(item.video, item.bookmark.seconds)}
-                    aria-label={`${formatTime(item.bookmark.seconds)}から再生: ${item.bookmark.note}`}
+                    onClick={() =>
+                      onOpen(item.video, item.bookmark.seconds, item.bookmark.endSeconds)
+                    }
+                    aria-label={`${bookmarkAction(item.bookmark)}: ${item.bookmark.note}`}
                   >
                     <div className="shelf-image">
                       <Thumbnail src={gateway.thumbnailUrl(item.bookmark.thumbnailId)} />
                       <span className="thumbnail-time">
                         <Play size={11} fill="currentColor" />
-                        {formatTime(item.bookmark.seconds)}
+                        {bookmarkTime(item.bookmark)}
+                        {item.bookmark.endSeconds != null && ' ↻'}
                       </span>
                       <span className={`bookmark-ribbon ribbon-${item.bookmark.color}`}>
                         <Bookmark size={14} fill="currentColor" strokeWidth={0} />

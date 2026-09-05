@@ -19,6 +19,7 @@ import {
   PanelLeftOpen,
   Pause,
   Play,
+  Repeat2,
   RotateCcw,
   RotateCw,
   Volume2,
@@ -32,6 +33,8 @@ import {
   formatTime,
   PLAYBACK_RATES,
   type Bookmark,
+  bookmarkTime,
+  bookmarkAction,
   type PlaybackSession,
   type Progress,
   type VideoEntry,
@@ -41,6 +44,7 @@ import { Button, IconButton } from '../../components/Button';
 import { Thumbnail } from '../../components/Thumbnail';
 import { MediaErrorDetails } from './MediaErrorDetails';
 import { mediaDiagnostics } from './mediaDiagnostics';
+import { EMPTY_REPEAT, RepeatControls, type RepeatRange } from './RepeatControls';
 
 export interface PlayerHandle {
   flush(): Promise<void>;
@@ -48,6 +52,7 @@ export interface PlayerHandle {
   togglePlay(): void;
   skip(seconds: number): void;
   seek(seconds: number, autoplay?: boolean): void;
+  playBookmark(bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>): void;
   bookmark(): Promise<void>;
 }
 
@@ -56,13 +61,14 @@ interface Props {
   video: VideoEntry;
   gateway: LibraryGateway;
   initialSeconds?: number;
+  initialEndSeconds?: number | null;
   autoplay?: boolean;
   focused: boolean;
   onToggleFocus(): void;
   onBack(): void;
   onInfo(): void;
   onRelink(): void;
-  onBookmark(frame: CapturedFrame): void;
+  onBookmark(frame: CapturedFrame, duration: number, endSeconds?: number): void;
   onEdit(bookmark: Bookmark): void;
   onUpdated(video: VideoEntry): void;
   onNotice(message: string): void;
@@ -74,6 +80,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     video: entry,
     gateway,
     initialSeconds,
+    initialEndSeconds,
     autoplay = false,
     focused,
     onToggleFocus,
@@ -101,6 +108,13 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const [saveError, setSaveError] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [visibleBookmarks, setVisibleBookmarks] = useState(40);
+  const [repeatVisible, setRepeatVisible] = useState(initialEndSeconds != null);
+  const [repeatRange, setRepeatRange] = useState<RepeatRange>(
+    initialSeconds !== undefined && initialEndSeconds != null
+      ? { start: initialSeconds, end: initialEndSeconds, enabled: true }
+      : EMPTY_REPEAT,
+  );
+  const [repeatError, setRepeatError] = useState('');
   const lastSavedAt = useRef(0);
   const capturingRef = useRef(false);
   const coverStarted = useRef(false);
@@ -171,20 +185,31 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     await Promise.all([...jobs.current]);
   }, [queue, saveSnapshot]);
 
-  const play = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || mediaError) return;
-    if (!initialPositionApplied.current || video.readyState < 2 || video.seeking) {
-      wantsPlay.current = true;
-      return;
-    }
-    wantsPlay.current = false;
-    if (video.ended || video.currentTime >= video.duration) video.currentTime = 0;
-    void video.play().catch((error: unknown) => {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      onNotice('しおりの位置へ移動しました。再生ボタンを押してください。');
-    });
-  }, [mediaError, onNotice]);
+  const play = useCallback(
+    (ignoreRepeat = false) => {
+      const video = videoRef.current;
+      if (!video || mediaError || capturingRef.current) return;
+      if (!initialPositionApplied.current || video.readyState < 2 || video.seeking) {
+        wantsPlay.current = true;
+        return;
+      }
+      wantsPlay.current = false;
+      if (
+        !ignoreRepeat &&
+        repeatRange.enabled &&
+        repeatRange.start !== null &&
+        repeatRange.end !== null &&
+        (video.currentTime < repeatRange.start || video.currentTime >= repeatRange.end)
+      )
+        video.currentTime = repeatRange.start;
+      else if (video.ended || video.currentTime >= video.duration) video.currentTime = 0;
+      void video.play().catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        onNotice('しおりの位置へ移動しました。再生ボタンを押してください。');
+      });
+    },
+    [mediaError, onNotice, repeatRange],
+  );
 
   const pause = useCallback(() => {
     wantsPlay.current = false;
@@ -201,13 +226,21 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const seek = useCallback(
     (seconds: number, startPlaying = false) => {
       const video = videoRef.current;
-      if (!video || !loaded || mediaError) return;
+      if (!video || !loaded || mediaError || capturingRef.current) return;
       const next = clampTime(seconds, video.duration);
+      if (
+        repeatRange.enabled &&
+        repeatRange.start !== null &&
+        repeatRange.end !== null &&
+        (next < repeatRange.start || next >= repeatRange.end)
+      ) {
+        setRepeatRange((current) => ({ ...current, enabled: false }));
+      }
       video.currentTime = next;
       setPosition(next);
-      if (startPlaying) play();
+      if (startPlaying) play(true);
     },
-    [loaded, mediaError, play],
+    [loaded, mediaError, play, repeatRange],
   );
 
   const skip = useCallback(
@@ -218,23 +251,86 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     [seek],
   );
 
-  const addBookmark = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || !loaded || mediaError || capturingRef.current) return;
-    capturingRef.current = true;
-    wantsPlay.current = false;
-    setCapturing(true);
-    try {
-      const frame = await captureFrame(video);
-      await flush(); // Persist duration before the bookmark is committed.
-      onBookmark(frame);
-    } catch (error) {
-      onNotice(errorMessage(error));
-    } finally {
-      capturingRef.current = false;
-      setCapturing(false);
-    }
-  }, [flush, loaded, mediaError, onBookmark, onNotice]);
+  const playBookmark = useCallback(
+    (bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>) => {
+      const video = videoRef.current;
+      if (!video || !loaded || mediaError || capturingRef.current) return;
+      setRepeatRange(
+        bookmark.endSeconds == null
+          ? EMPTY_REPEAT
+          : {
+              start: bookmark.seconds,
+              end: bookmark.endSeconds,
+              enabled: true,
+            },
+      );
+      setRepeatVisible(bookmark.endSeconds != null);
+      setRepeatError('');
+      video.currentTime = clampTime(bookmark.seconds, video.duration);
+      setPosition(video.currentTime);
+      play(true);
+    },
+    [loaded, mediaError, play],
+  );
+
+  const addBookmark = useCallback(
+    async (range?: { start: number; end: number }) => {
+      const video = videoRef.current;
+      if (!video || !loaded || mediaError || capturingRef.current) return;
+      capturingRef.current = true;
+      wantsPlay.current = false;
+      setCapturing(true);
+      try {
+        if (range) {
+          // WebKit can report HAVE_CURRENT_DATA yet keep a black frame after
+          // paused-only seeks. Prime playback silently before capturing A.
+          const wasMuted = video.muted;
+          let timer: number | undefined;
+          let frameCallback: number | undefined;
+          video.muted = true;
+          try {
+            await Promise.race([
+              Promise.all([
+                new Promise<void>((resolve) => {
+                  if (typeof video.requestVideoFrameCallback === 'function')
+                    frameCallback = video.requestVideoFrameCallback(() => resolve());
+                  else resolve();
+                }),
+                video.play(),
+              ]),
+              new Promise<never>((_, reject) => {
+                timer = window.setTimeout(
+                  () =>
+                    reject(
+                      new Error(
+                        '映像を読み込めません。再生してからもう一度保存してください。',
+                      ),
+                    ),
+                  6000,
+                );
+              }),
+            ]);
+          } finally {
+            window.clearTimeout(timer);
+            if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
+            video.pause();
+            video.muted = wasMuted;
+          }
+          if (video.currentTime !== range.start) video.currentTime = range.start;
+          setPosition(range.start);
+        }
+        const frame = await captureFrame(video);
+        await flush(); // Persist duration before the bookmark is committed.
+        onBookmark(frame, video.duration, range?.end);
+      } catch (error) {
+        onNotice(errorMessage(error));
+      } finally {
+        capturingRef.current = false;
+        setCapturing(false);
+      }
+    },
+    [flush, loaded, mediaError, onBookmark, onNotice],
+  );
 
   useImperativeHandle(
     ref,
@@ -245,8 +341,9 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       skip,
       seek,
       bookmark: addBookmark,
+      playBookmark,
     }),
-    [flush, pause, togglePlay, skip, seek, addBookmark],
+    [flush, pause, togglePlay, skip, seek, addBookmark, playBookmark],
   );
 
   useEffect(() => {
@@ -311,6 +408,41 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const activeMark = [...marks].reverse().find((mark) => mark.seconds <= position + 0.3);
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
+  function setRepeatPoint(point: 'start' | 'end') {
+    const video = videoRef.current;
+    if (!video || !loaded || mediaError || capturingRef.current) return;
+    const seconds = Math.floor(clampTime(video.currentTime, duration) * 10) / 10;
+    setRepeatError('');
+    if (point === 'start') {
+      setRepeatRange({ start: seconds, end: null, enabled: false });
+    } else if (
+      repeatRange.start !== null &&
+      Math.round(seconds * 10) - Math.round(repeatRange.start * 10) >= 5
+    ) {
+      setRepeatRange({ ...repeatRange, end: seconds, enabled: true });
+      video.currentTime = repeatRange.start;
+      setPosition(repeatRange.start);
+    } else {
+      setRepeatError('B点はA点より0.5秒以上後の位置に設定してください。');
+    }
+  }
+
+  function repeatAtBoundary(video: HTMLVideoElement, ended = false) {
+    if (
+      !repeatRange.enabled ||
+      repeatRange.start === null ||
+      repeatRange.end === null ||
+      mediaError ||
+      video.seeking ||
+      (!ended && (video.paused || video.currentTime < repeatRange.end))
+    )
+      return false;
+    video.currentTime = repeatRange.start;
+    setPosition(repeatRange.start);
+    if (ended) play();
+    return true;
+  }
+
   return (
     <div className={`player-view ${focused ? 'is-focused' : ''}`}>
       <header className="player-heading">
@@ -323,6 +455,19 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           </div>
         </div>
         <div className="player-heading-actions">
+          <Button
+            variant="ghost"
+            aria-label={repeatVisible ? '区間リピートの設定を閉じる' : '区間リピートを設定'}
+            title="A–B区間リピート"
+            aria-expanded={repeatVisible}
+            aria-controls="repeat-controls"
+            className={`repeat-toggle ${repeatRange.enabled ? 'repeat-is-active' : ''}`}
+            onClick={() => setRepeatVisible((current) => !current)}
+          >
+            <Repeat2 size={18} />
+            <span>A–B</span>
+            {repeatRange.enabled && <span className="sr-only">リピート中</span>}
+          </Button>
           {focused && (
             <IconButton
               label="しおりを追加 (B)"
@@ -371,7 +516,8 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 if (wantsPlay.current) play();
               }}
               onTimeUpdate={(event) => {
-                setPosition(event.currentTarget.currentTime);
+                if (!repeatAtBoundary(event.currentTarget))
+                  setPosition(event.currentTarget.currentTime);
                 saveSnapshot();
               }}
               onSeeked={() => {
@@ -384,8 +530,8 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 setPlaying(false);
                 saveSnapshot(true);
               }}
-              onEnded={() => {
-                setPlaying(false);
+              onEnded={(event) => {
+                if (!repeatAtBoundary(event.currentTarget, true)) setPlaying(false);
                 saveSnapshot(true);
               }}
               onError={(event) => {
@@ -405,7 +551,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
               </div>
             )}
             {loaded && !playing && !mediaError && (
-              <button className="stage-play" aria-label="動画を再生" onClick={play}>
+              <button className="stage-play" aria-label="動画を再生" onClick={() => play()}>
                 <Play size={30} fill="currentColor" />
               </button>
             )}
@@ -442,9 +588,20 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                   max={duration || 1}
                   step="0.1"
                   value={clampTime(position, duration)}
-                  disabled={!loaded || !!mediaError}
+                  disabled={!loaded || !!mediaError || capturing}
                   onChange={(event) => seek(Number(event.target.value))}
                 />
+                {repeatRange.start !== null && repeatRange.end !== null && duration > 0 && (
+                  <div className="timeline-repeat" aria-hidden="true">
+                    <span
+                      className={repeatRange.enabled ? 'is-active' : ''}
+                      style={{
+                        left: `${(repeatRange.start / duration) * 100}%`,
+                        width: `${((repeatRange.end - repeatRange.start) / duration) * 100}%`,
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="timeline-marks" aria-hidden="true">
                   {marks.map((mark) => (
                     <i
@@ -483,7 +640,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                   <button
                     key={seconds}
                     className="skip-button"
-                    disabled={!loaded || !!mediaError}
+                    disabled={!loaded || !!mediaError || capturing}
                     title={`${-seconds}秒戻る`}
                     aria-label={`${-seconds}秒戻る`}
                     onClick={() => skip(seconds)}
@@ -494,7 +651,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 ))}
                 <button
                   className="play-button"
-                  disabled={!loaded || !!mediaError}
+                  disabled={!loaded || !!mediaError || capturing}
                   aria-label={playing ? '一時停止' : '再生'}
                   title="再生 / 一時停止 (Space)"
                   onClick={togglePlay}
@@ -516,7 +673,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                   <button
                     key={seconds}
                     className="skip-button"
-                    disabled={!loaded || !!mediaError}
+                    disabled={!loaded || !!mediaError || capturing}
                     title={`${seconds}秒進む`}
                     aria-label={`${seconds}秒進む`}
                     onClick={() => skip(seconds)}
@@ -590,6 +747,31 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
               </div>
             </div>
           </div>
+          {repeatVisible && (
+            <RepeatControls
+              onSave={() => {
+                if (repeatRange.start !== null && repeatRange.end !== null)
+                  void addBookmark({ start: repeatRange.start, end: repeatRange.end });
+              }}
+              range={repeatRange}
+              error={repeatError}
+              disabled={!loaded || !!mediaError || capturing}
+              onStart={() => setRepeatPoint('start')}
+              onEnd={() => setRepeatPoint('end')}
+              onToggle={() => {
+                const enabled = !repeatRange.enabled;
+                setRepeatRange({ ...repeatRange, enabled });
+                if (enabled && repeatRange.start !== null && videoRef.current) {
+                  videoRef.current.currentTime = repeatRange.start;
+                  setPosition(repeatRange.start);
+                }
+              }}
+              onClear={() => {
+                setRepeatRange(EMPTY_REPEAT);
+                setRepeatError('');
+              }}
+            />
+          )}
           {saveStatus === 'failed' && (
             <div className="inline-error" role="alert">
               <CircleAlert size={17} />
@@ -630,14 +812,18 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 >
                   <button
                     className="player-bookmark-open"
-                    aria-label={`${formatTime(bookmark.seconds)}から再生: ${bookmark.note}`}
-                    onClick={() => seek(bookmark.seconds, true)}
+                    aria-label={`${bookmarkAction(bookmark)}: ${bookmark.note}`}
+                    onClick={() => playBookmark(bookmark)}
                   >
                     <Thumbnail src={gateway.thumbnailUrl(bookmark.thumbnailId)} />
                     <span className="player-bookmark-text">
                       <span className={`bookmark-time color-${bookmark.color}`}>
-                        <Play size={10} fill="currentColor" />
-                        {formatTime(bookmark.seconds)}
+                        {bookmark.endSeconds == null ? (
+                          <Play size={10} fill="currentColor" />
+                        ) : (
+                          <Repeat2 size={12} />
+                        )}
+                        {bookmarkTime(bookmark)}
                       </span>
                       <span className="player-bookmark-note">{bookmark.note}</span>
                     </span>

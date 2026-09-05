@@ -138,9 +138,10 @@ pub async fn edit_bookmark(
     bookmark_id: String,
     note: String,
     color: BookmarkColor,
+    end_seconds: Option<f64>,
 ) -> Result<VideoEntry, CommandError> {
     let service = service.inner().clone();
-    blocking(move || service.edit_bookmark(&id, &bookmark_id, &note, color)).await
+    blocking(move || service.edit_bookmark(&id, &bookmark_id, &note, color, end_seconds)).await
 }
 
 #[tauri::command]

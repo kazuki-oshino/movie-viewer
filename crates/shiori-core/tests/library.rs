@@ -50,6 +50,7 @@ impl Fixture {
         NewBookmark {
             id: uuid::Uuid::new_v4().to_string(),
             seconds,
+            end_seconds: None,
             note: "  大切な説明\nここを見返す  ".into(),
             color: BookmarkColor::Amber,
             thumbnail_data_url: jpeg(),
@@ -148,7 +149,13 @@ fn missing_video_keeps_bookmarks_readable_and_editable() {
     ));
     let entry = f
         .service
-        .edit_bookmark(&id, &input.id, "移動してもメモは残る", BookmarkColor::Blue)
+        .edit_bookmark(
+            &id,
+            &input.id,
+            "移動してもメモは残る",
+            BookmarkColor::Blue,
+            None,
+        )
         .unwrap();
     assert_eq!(entry.availability, Availability::Missing);
     assert_eq!(entry.video.bookmarks[0].note, "移動してもメモは残る");
@@ -472,4 +479,84 @@ fn pruning_stops_when_a_corrupt_record_might_still_reference_images() {
             .join(format!("{}.jpg", mark.id))
             .exists()
     );
+}
+
+#[test]
+fn legacy_point_bookmarks_stay_readable_and_range_bookmarks_survive_restart() {
+    let f = Fixture::new();
+    let original = fs::read(&f.source).unwrap();
+    let (id, _) = f.ready();
+    let point = f.bookmark(9.0);
+    f.service.add_bookmark(&id, point.clone()).unwrap();
+    let mut legacy: serde_json::Value =
+        serde_json::from_slice(&fs::read(f.record(&id)).unwrap()).unwrap();
+    legacy["schemaVersion"] = 1.into();
+    legacy["bookmarks"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("endSeconds");
+    fs::write(f.record(&id), serde_json::to_vec(&legacy).unwrap()).unwrap();
+    let before = fs::read(f.record(&id)).unwrap();
+    assert_eq!(
+        f.service.list().unwrap().videos[0].video.bookmarks[0].end_seconds,
+        None
+    );
+    assert_eq!(fs::read(f.record(&id)).unwrap(), before);
+    let mut range = f.bookmark(10.2);
+    range.end_seconds = Some(20.7);
+    let saved = f.service.add_bookmark(&id, range.clone()).unwrap().video;
+    assert_eq!(saved.schema_version, 2);
+    assert_eq!(saved.bookmarks[0].id, point.id);
+    f.service.add_bookmark(&id, range.clone()).unwrap();
+    drop(f.service);
+    let reopened = LibraryService::new(f.temporary.path().join("data")).unwrap();
+    let restored = reopened.list().unwrap().videos.remove(0).video;
+    assert_eq!(restored.bookmarks, saved.bookmarks);
+    assert_eq!(restored.bookmarks[1].end_seconds, Some(20.7));
+    let converted = reopened
+        .edit_bookmark(&id, &range.id, "地点へ変更", BookmarkColor::Sage, None)
+        .unwrap()
+        .video;
+    assert_eq!(converted.bookmarks[1].seconds, 10.2);
+    assert_eq!(converted.bookmarks[1].end_seconds, None);
+    assert_eq!(converted.bookmarks[1].thumbnail_id, range.id);
+    let changed = reopened
+        .edit_bookmark(
+            &id,
+            &point.id,
+            "区間へ変更",
+            BookmarkColor::Blue,
+            Some(12.0),
+        )
+        .unwrap()
+        .video;
+    assert_eq!(changed.bookmarks[0].end_seconds, Some(12.0));
+    assert_eq!(fs::read(&f.source).unwrap(), original);
+}
+
+#[test]
+fn invalid_repeat_endpoints_never_change_saved_bookmarks() {
+    let f = Fixture::new();
+    let (id, _) = f.ready();
+    let mut range = f.bookmark(10.2);
+    range.end_seconds = Some(10.7);
+    f.service.add_bookmark(&id, range.clone()).unwrap();
+    let before = fs::read(f.record(&id)).unwrap();
+    for end in [f64::NAN, f64::INFINITY, -1.0, 9.0, 10.2, 10.69, 120.1] {
+        let mut invalid = f.bookmark(10.2);
+        invalid.end_seconds = Some(end);
+        assert!(f.service.add_bookmark(&id, invalid).is_err());
+        assert!(
+            f.service
+                .edit_bookmark(&id, &range.id, "変更", BookmarkColor::Blue, Some(end))
+                .is_err()
+        );
+        assert_eq!(fs::read(f.record(&id)).unwrap(), before);
+    }
+    range.end_seconds = Some(11.0);
+    assert!(f.service.add_bookmark(&id, range.clone()).is_err());
+    assert_eq!(fs::read(f.record(&id)).unwrap(), before);
+    f.service
+        .edit_bookmark(&id, &range.id, "末尾まで", BookmarkColor::Sage, Some(120.0))
+        .unwrap();
 }

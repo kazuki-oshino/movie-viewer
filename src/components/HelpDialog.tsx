@@ -9,6 +9,12 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
         <br />
         棚に並んだメモを押すと、その時間から再生できます。
       </p>
+      <div className="help-feature-notes">
+        <p>
+          <strong>説明や動きを繰り返し見る</strong>
+          再生画面の「A–B」で設定を開き、始点Aと終点Bを現在位置から指定します。区間外へ移動すると解除されます。
+        </p>
+      </div>
       <h3>
         <Keyboard size={17} />
         キーボードショートカット

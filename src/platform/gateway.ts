@@ -23,6 +23,7 @@ export interface LibraryGateway {
     bookmarkId: string,
     note: string,
     color: BookmarkColor,
+    endSeconds?: number | null,
   ): Promise<VideoEntry>;
   removeBookmark(id: string, bookmarkId: string): Promise<VideoEntry>;
   saveCover(id: string, dataUrl: string): Promise<VideoEntry>;

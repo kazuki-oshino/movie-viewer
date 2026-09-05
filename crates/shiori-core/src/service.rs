@@ -9,7 +9,7 @@ use std::{
 use crate::{
     Availability, Bookmark, BookmarkColor, CoreError, LibraryListing, MAX_BOOKMARKS, NewBookmark,
     PlaybackSession, Progress, Result, SCHEMA_VERSION, Video, VideoEntry, storage::Store,
-    validate_id, validate_note, validate_rate, validate_seconds,
+    validate_id, validate_note, validate_range, validate_rate, validate_seconds,
 };
 
 struct Session {
@@ -167,8 +167,11 @@ impl LibraryService {
         validate_seconds(input.seconds)?;
         let _lock = self.lock()?;
         let mut video = self.store.load(id)?;
+        validate_range(input.seconds, input.end_seconds, video.duration)?;
         if let Some(existing) = video.bookmarks.iter_mut().find(|b| b.id == input.id) {
-            if (existing.seconds - input.seconds).abs() > 0.1 {
+            if (existing.seconds - input.seconds).abs() > 0.1
+                || existing.end_seconds != input.end_seconds
+            {
                 return Err(CoreError::Invalid(
                     "同じしおりIDで時刻を変更できません".into(),
                 ));
@@ -189,10 +192,14 @@ impl LibraryService {
         }
         self.store
             .save_thumbnail(&input.id, &input.thumbnail_data_url)?;
+        if input.end_seconds.is_some() {
+            video.schema_version = SCHEMA_VERSION;
+        }
         video.cover_id.get_or_insert_with(|| input.id.clone());
         video.bookmarks.push(Bookmark {
             id: input.id.clone(),
             seconds: input.seconds.min(video.duration),
+            end_seconds: input.end_seconds,
             note: input.note.trim().into(),
             color: input.color,
             thumbnail_id: input.id,
@@ -209,6 +216,7 @@ impl LibraryService {
         bookmark_id: &str,
         note: &str,
         color: BookmarkColor,
+        end_seconds: Option<f64>,
     ) -> Result<VideoEntry> {
         validate_note(note)?;
         let _lock = self.lock()?;
@@ -218,6 +226,11 @@ impl LibraryService {
             .iter_mut()
             .find(|b| b.id == bookmark_id)
             .ok_or(CoreError::NotFound)?;
+        validate_range(bookmark.seconds, end_seconds, video.duration)?;
+        bookmark.end_seconds = end_seconds;
+        if end_seconds.is_some() {
+            video.schema_version = SCHEMA_VERSION;
+        }
         bookmark.note = note.trim().into();
         bookmark.color = color;
         video.updated_at_ms = now();

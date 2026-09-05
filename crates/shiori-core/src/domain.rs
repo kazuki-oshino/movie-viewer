@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CoreError, Result};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 pub const MAX_NOTE_LENGTH: usize = 4_000;
 pub const MAX_BOOKMARKS: usize = 10_000;
 
@@ -22,6 +22,8 @@ pub enum BookmarkColor {
 pub struct Bookmark {
     pub id: String,
     pub seconds: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_seconds: Option<f64>,
     pub note: String,
     pub color: BookmarkColor,
     pub thumbnail_id: String,
@@ -84,6 +86,8 @@ pub struct PlaybackSession {
 pub struct NewBookmark {
     pub id: String,
     pub seconds: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_seconds: Option<f64>,
     pub note: String,
     pub color: BookmarkColor,
     pub thumbnail_data_url: String,
@@ -111,6 +115,18 @@ pub fn validate_seconds(seconds: f64) -> Result<()> {
     Ok(())
 }
 
+pub fn validate_range(start: f64, end: Option<f64>, duration: f64) -> Result<()> {
+    if let Some(end) = end {
+        validate_seconds(end)?;
+        if end - start < 0.5 - 1e-9 || duration <= 0.0 || end > duration {
+            return Err(CoreError::Invalid(
+                "区間は0.5秒以上で、動画の長さ以内にしてください".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_rate(rate: f64) -> Result<()> {
     if !rate.is_finite() || !(0.1..=2.0).contains(&rate) {
         return Err(CoreError::Invalid("再生速度は0.1〜2.0倍です".into()));
@@ -127,7 +143,7 @@ pub fn validate_note(note: &str) -> Result<()> {
 
 impl Video {
     pub fn validate(&self) -> Result<()> {
-        if self.schema_version != SCHEMA_VERSION {
+        if !(1..=SCHEMA_VERSION).contains(&self.schema_version) {
             return Err(CoreError::UnsupportedVersion);
         }
         validate_id(&self.id)?;
@@ -156,6 +172,10 @@ impl Video {
             validate_id(&bookmark.thumbnail_id)?;
             validate_seconds(bookmark.seconds)?;
             validate_note(&bookmark.note)?;
+            validate_range(bookmark.seconds, bookmark.end_seconds, self.duration)?;
+            if self.schema_version == 1 && bookmark.end_seconds.is_some() {
+                return Err(CoreError::Invalid("区間しおりの保存形式".into()));
+            }
             if !ids.insert(&bookmark.id)
                 || (self.duration > 0.0 && bookmark.seconds > self.duration + 0.1)
             {

@@ -4,6 +4,7 @@ export type Availability = 'available' | 'missing' | 'changed' | 'inaccessible';
 export interface Bookmark {
   id: string;
   seconds: number;
+  endSeconds?: number | null;
   note: string;
   color: BookmarkColor;
   thumbnailId: string;
@@ -48,6 +49,7 @@ export interface Progress {
 export interface NewBookmark {
   id: string;
   seconds: number;
+  endSeconds?: number | null;
   note: string;
   color: BookmarkColor;
   thumbnailDataUrl: string;
@@ -82,6 +84,20 @@ export function formatTime(seconds: number) {
     : `${minutes}:${rest}`;
 }
 
+export function formatRepeatTime(seconds: number) {
+  return `${formatTime(seconds)}.${Math.floor((seconds + 0.00001) * 10) % 10}`;
+}
+
+export function bookmarkTime(bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>) {
+  return bookmark.endSeconds == null
+    ? formatTime(bookmark.seconds)
+    : `${formatRepeatTime(bookmark.seconds)}–${formatRepeatTime(bookmark.endSeconds)}`;
+}
+
+export function bookmarkAction(bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>) {
+  return `${bookmarkTime(bookmark)}${bookmark.endSeconds == null ? 'から再生' : 'をリピート'}`;
+}
+
 export function formatSize(bytes: number) {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -111,7 +127,7 @@ export function shelfItems(
       ({ video, bookmark }) =>
         (videoId === 'all' || video.id === videoId) &&
         (color === 'all' || bookmark.color === color) &&
-        matchesSearch(query, video.title, bookmark.note, formatTime(bookmark.seconds)),
+        matchesSearch(query, video.title, bookmark.note, bookmarkTime(bookmark)),
     )
     .sort((a, b) =>
       sort === 'newest'

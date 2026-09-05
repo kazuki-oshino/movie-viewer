@@ -1851,6 +1851,83 @@ select {
   margin-top: 13px;
 }
 
+/* 見返す区間を決める */
+.repeat-toggle {
+  gap: 5px;
+  color: #607b4e;
+  font-variant-numeric: tabular-nums;
+}
+.repeat-is-active {
+  background: #dfe9d4;
+  color: #385b29;
+}
+.repeat-controls {
+  flex-shrink: 0;
+  padding: 10px 0 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.repeat-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted);
+}
+.repeat-actions .button {
+  padding-inline: 10px;
+  gap: 7px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.repeat-actions strong {
+  font-size: 10px;
+  color: #748b60;
+}
+.repeat-controls p {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.repeat-controls .repeat-error {
+  color: #a25042;
+}
+.timeline-repeat {
+  position: absolute;
+  inset: 0 6px;
+  pointer-events: none;
+}
+.timeline-repeat > span {
+  position: absolute;
+  top: 6px;
+  height: 6px;
+  border-radius: 2px;
+  border-inline: 2px solid #8da37b;
+  background: #a6b99545;
+}
+.timeline-repeat > .is-active {
+  background: #8da66c;
+  border-color: #577b3e;
+}
+
+.help-feature-notes {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.help-feature-notes p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.help-feature-notes strong {
+  display: block;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+
 /* ダイアログと保存状態 */
 .modal {
   color: var(--ink);
@@ -2740,4 +2817,42 @@ textarea::placeholder {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.bookmark-kind {
+  border: 0;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bookmark-kind label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.bookmark-kind input {
+  accent-color: var(--green);
+}
+.bookmark-range-fields {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.bookmark-range-fields p {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.bookmark-range-fields input {
+  width: 100%;
+  min-height: 40px;
+}
+.bookmark-range-fields small {
+  color: var(--muted);
 }
