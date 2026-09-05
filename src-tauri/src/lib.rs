@@ -93,7 +93,13 @@ impl log::Log for DiagnosticLogger {
     fn log(&self, record: &log::Record<'_>) {
         if self.enabled(record.metadata()) {
             use std::io::Write;
-            let _ = writeln!(std::io::stderr(), "[native {} {}] {}", record.level(), record.target(), record.args());
+            let _ = writeln!(
+                std::io::stderr(),
+                "[native {} {}] {}",
+                record.level(),
+                record.target(),
+                record.args()
+            );
         }
     }
 
@@ -106,7 +112,10 @@ fn init_playback_log() -> std::io::Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let path = std::env::temp_dir().join(format!("shiori-playback-{timestamp}-{}.log", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "shiori-playback-{timestamp}-{}.log",
+        std::process::id()
+    ));
     let file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -119,7 +128,12 @@ fn init_playback_log() -> std::io::Result<()> {
     let _ = PLAYBACK_LOG.set(path.clone());
     let _ = log::set_logger(&DIAGNOSTIC_LOGGER);
     log::set_max_level(log::LevelFilter::Warn);
-    let _ = writeln!(std::io::stderr(), "Shiori native playback diagnostics v4\ncheckpoint: f48956d\npid: {}\nstartedUnixMs: {timestamp}\nlogFile: {}\ntransport: Tauri 2.11.5 asset / instrumented Wry 0.55.1\nrangeLimitBytes: 8388608 (v3: 1024000)\n", std::process::id(), path.display());
+    let _ = writeln!(
+        std::io::stderr(),
+        "Shiori native playback diagnostics v4\ncheckpoint: f48956d\npid: {}\nstartedUnixMs: {timestamp}\nlogFile: {}\ntransport: Tauri 2.11.5 asset / instrumented Wry 0.55.1\nrangeLimitBytes: 8388608 (v3: 1024000)\n",
+        std::process::id(),
+        path.display()
+    );
     Ok(())
 }
 
@@ -127,16 +141,24 @@ fn init_playback_log() -> std::io::Result<()> {
 fn playback_diagnostics(frontend: String) -> Result<String, String> {
     use std::io::{Read, Seek, SeekFrom, Write};
     let path = PLAYBACK_LOG.get().ok_or("native log was not initialized")?;
-    let _ = writeln!(std::io::stderr(), "\n[frontend playback error]\n{frontend}\n");
+    let _ = writeln!(
+        std::io::stderr(),
+        "\n[frontend playback error]\n{frontend}\n"
+    );
     let mut file = std::fs::File::open(path).map_err(|error| format!("{error:?}"))?;
     let length = file.metadata().map_err(|error| format!("{error:?}"))?.len();
     let start = length.saturating_sub(128 * 1024);
-    file.seek(SeekFrom::Start(start)).map_err(|error| format!("{error:?}"))?;
+    file.seek(SeekFrom::Start(start))
+        .map_err(|error| format!("{error:?}"))?;
     let mut bytes = Vec::new();
-    file.take(128 * 1024).read_to_end(&mut bytes).map_err(|error| format!("{error:?}"))?;
+    file.take(128 * 1024)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("{error:?}"))?;
     Ok(format!(
         "nativeLog.file: {}\nnativeLog.note: 実リクエストとこのアプリのstderr。別プロセスのWebKit内部ログは含まれません。ファイル名・パスは未加工です。\nnativeLog.truncated: {}\n\n{}",
-        path.display(), start != 0, String::from_utf8_lossy(&bytes)
+        path.display(),
+        start != 0,
+        String::from_utf8_lossy(&bytes)
     ))
 }
 

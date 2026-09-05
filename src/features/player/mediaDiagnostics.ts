@@ -67,9 +67,7 @@ export function mediaDiagnostics(
   return [
     'Shiori playback diagnostics v4 (raw; rangeLimit=8388608)',
     `error.code: ${error ? namedState(error.code, ERROR_NAMES) : 'none (MediaErrorなし)'}`,
-    `error.message: ${
-      JSON.stringify(error?.message ?? null)
-    }`,
+    `error.message: ${JSON.stringify(error?.message ?? null)}`,
     `sourcePath: ${source.path}`,
     `currentSrc: ${video.currentSrc}`,
     `src: ${video.src}`,

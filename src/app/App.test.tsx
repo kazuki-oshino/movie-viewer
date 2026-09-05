@@ -1,9 +1,15 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { PreviewGateway } from '../platform/previewGateway';
+import * as tauriCore from '@tauri-apps/api/core';
 import * as assetDiagnostics from '../features/player/assetDiagnostics';
+
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
+  invoke: vi.fn(),
+}));
 
 async function demoApp() {
   const gateway = new PreviewGateway();
@@ -182,6 +188,9 @@ describe('ライブラリの画面', () => {
 });
 
 describe('動画プレイヤー', () => {
+  beforeEach(() => {
+    vi.mocked(tauriCore.invoke).mockReset().mockResolvedValue('nativeLog: fixture');
+  });
   it('ネイティブの再生失敗時だけ配信診断を一度実行し、完了後にまとめてコピーできる', async () => {
     let finish!: (report: string) => void;
     const inspect = vi
@@ -212,7 +221,7 @@ describe('動画プレイヤー', () => {
       name: '再生エラーの詳細',
     }) as HTMLTextAreaElement;
     expect(details).toHaveAttribute('aria-busy', 'true');
-    expect(details.value).toContain('Shiori playback diagnostics v2');
+    expect(details.value).toContain('Shiori playback diagnostics v4');
     expect(details.value).toContain('4 (MEDIA_ERR_SRC_NOT_SUPPORTED)');
 
     Object.defineProperty(video, 'error', { value: { code: 2, message: 'later error' } });
@@ -224,7 +233,13 @@ describe('動画プレイヤー', () => {
     expect(details).toHaveAttribute('aria-busy', 'false');
     expect(details.value).toContain('assetProbe.head.status: 200');
     expect(details.value).toContain('4 (MEDIA_ERR_SRC_NOT_SUPPORTED)');
-    expect(details.value).not.toMatch(/later error|private-video/u);
+    expect(details.value).not.toContain('later error');
+    expect(details.value).toContain('private-video');
+    expect(details.value).toContain('nativeLog: fixture');
+    expect(tauriCore.invoke).toHaveBeenCalledWith('playback_diagnostics', {
+      frontend: expect.stringContaining('Shiori playback diagnostics v4'),
+    });
+    expect(screen.getByText(/ファイル名・保存パスを含む未加工ログ/)).toBeVisible();
     const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     await user.click(screen.getByRole('button', { name: '詳細をコピー' }));
     expect(copy).toHaveBeenCalledWith(details.value);
@@ -266,7 +281,8 @@ describe('動画プレイヤー', () => {
     expect(details.value).toContain('assetProbe.head.status: 403');
   });
 
-  it('追加診断自体が失敗しても元のエラーをコピーでき、例外内のパスは表示しない', async () => {
+  it('追加診断やネイティブログが失敗しても元のエラーと未加工の例外を保持する', async () => {
+    vi.mocked(tauriCore.invoke).mockRejectedValueOnce(new Error('native fixture failure'));
     vi.spyOn(assetDiagnostics, 'collectAssetDiagnostics').mockRejectedValue(
       new Error('/Users/private-person/private.mp4'),
     );
@@ -285,11 +301,13 @@ describe('動画プレイヤー', () => {
       name: '再生エラーの詳細',
     }) as HTMLTextAreaElement;
     expect(details.value).toContain('4 (MEDIA_ERR_SRC_NOT_SUPPORTED)');
-    expect(details.value).toContain('assetProbe: unavailable');
-    expect(details.value).not.toContain('private-person');
+    expect(details.value).toContain(
+      'assetProbe.error: Error: /Users/private-person/private.mp4',
+    );
+    expect(details.value).toContain('nativeLog.error: Error: native fixture failure');
   });
 
-  it('再生失敗の元メッセージと状態を表示し、パスを伏せた詳細をコピーできる', async () => {
+  it('再生失敗の元メッセージと状態を固定し、未加工の詳細をコピーできる', async () => {
     const inspect = vi.spyOn(assetDiagnostics, 'collectAssetDiagnostics');
     const { user, container, gateway } = await demoApp();
     const save = vi.spyOn(gateway, 'saveProgress');
@@ -316,10 +334,10 @@ describe('動画プレイヤー', () => {
     }) as HTMLTextAreaElement;
     const captured = details.value;
     expect(captured).toContain('4 (MEDIA_ERR_SRC_NOT_SUPPORTED)');
-    expect(captured).toContain('Format error: "[非公開のファイル情報]"; code=-11828');
+    expect(captured).toContain(`error.message: ${JSON.stringify(video.error!.message)}`);
     expect(captured).toContain('3 (NETWORK_NO_SOURCE)');
     expect(captured).toMatch(/loadstart\n.*stalled\n.*error/u);
-    expect(captured).not.toContain('demo-0');
+    expect(captured).toContain('demo-0');
     expect(details).toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: '再生' })).toBeDisabled();
     expect(save).not.toHaveBeenCalled();
@@ -347,7 +365,7 @@ describe('動画プレイヤー', () => {
     const details = screen.getByRole('textbox', {
       name: '再生エラーの詳細',
     }) as HTMLTextAreaElement;
-    expect(details.value).toContain('WebViewから詳細メッセージは提供されていません');
+    expect(details.value).toContain('error.message: ""');
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
       new DOMException('Denied', 'NotAllowedError'),
     );

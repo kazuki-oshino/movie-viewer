@@ -23,7 +23,10 @@ describe('再生エラーの診断情報', () => {
       ['0ms loadstart', '1000ms error'],
     );
     expect(diagnostics).toContain(`error.code: ${code} (${name})`);
-    expect(diagnostics).toContain('error.message: Format error');
+    expect(diagnostics).toContain('error.message: "Format error"');
+    expect(diagnostics).toContain(
+      'Shiori playback diagnostics v4 (raw; rangeLimit=8388608)',
+    );
     expect(diagnostics).toContain('networkState: 3 (NETWORK_NO_SOURCE)');
     expect(diagnostics).toContain('readyState: 0 (HAVE_NOTHING)');
     expect(diagnostics).toContain('duration: NaN');
@@ -31,7 +34,8 @@ describe('再生エラーの診断情報', () => {
     expect(diagnostics).toContain('registeredBytes: 2047364458');
     expect(diagnostics).toContain('initialPositionApplied: false');
     expect(diagnostics).toContain('1000ms error');
-    expect(diagnostics).not.toMatch(/private-person|secret|%2F|\/Users/u);
+    expect(diagnostics).toContain('sourcePath: /Users/private-person/secret.mp4');
+    expect(diagnostics).toContain(`src: ${video.src}`);
   });
 
   it.each([null, { code: 4, message: '' }, { code: 4, message: '  ' }])(
@@ -40,7 +44,9 @@ describe('再生エラーの診断情報', () => {
       const video = document.createElement('video');
       Object.defineProperty(video, 'error', { value: error });
       const diagnostics = mediaDiagnostics(video, { path: '', byteLen: 0 }, false, []);
-      expect(diagnostics).toContain('WebViewから詳細メッセージは提供されていません');
+      expect(diagnostics).toContain(
+        `error.message: ${JSON.stringify(error?.message ?? null)}`,
+      );
       expect(diagnostics).toContain(
         error ? '4 (MEDIA_ERR_SRC_NOT_SUPPORTED)' : 'MediaErrorなし',
       );

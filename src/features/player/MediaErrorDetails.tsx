@@ -52,7 +52,9 @@ export function MediaErrorDetails({
       }
       if (controller.signal.aborted) return;
       try {
-        const native = await invoke<string>('playback_diagnostics', { frontend: diagnostics });
+        const native = await invoke<string>('playback_diagnostics', {
+          frontend: diagnostics,
+        });
         finish(`${probe}\n\n${native}`);
       } catch (error) {
         finish(`${probe}\n\nnativeLog.error: ${String(error)}`);
