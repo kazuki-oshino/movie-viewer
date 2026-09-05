@@ -8,8 +8,8 @@ use std::{
 
 use serde::Serialize;
 use shiori_core::{
-    BookmarkColor, CoreError, LibraryListing, LibraryService, NewBookmark, PlaybackSession,
-    Progress, VideoEntry,
+    BookmarkColor, ColorAdjustments, CoreError, LibraryListing, LibraryService, NewBookmark,
+    PlaybackSession, Progress, VideoEntry,
 };
 use tauri::{AppHandle, Manager, State};
 
@@ -139,9 +139,20 @@ pub async fn edit_bookmark(
     note: String,
     color: BookmarkColor,
     end_seconds: Option<f64>,
+    color_adjustments: Option<ColorAdjustments>,
 ) -> Result<VideoEntry, CommandError> {
     let service = service.inner().clone();
-    blocking(move || service.edit_bookmark(&id, &bookmark_id, &note, color, end_seconds)).await
+    blocking(move || {
+        service.edit_bookmark(
+            &id,
+            &bookmark_id,
+            &note,
+            color,
+            end_seconds,
+            color_adjustments,
+        )
+    })
+    .await
 }
 
 #[tauri::command]

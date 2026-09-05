@@ -7,9 +7,10 @@ use std::{
 };
 
 use crate::{
-    Availability, Bookmark, BookmarkColor, CoreError, LibraryListing, MAX_BOOKMARKS, NewBookmark,
-    PlaybackSession, Progress, Result, SCHEMA_VERSION, Video, VideoEntry, storage::Store,
-    validate_id, validate_note, validate_range, validate_rate, validate_seconds,
+    Availability, Bookmark, BookmarkColor, ColorAdjustments, CoreError, LibraryListing,
+    MAX_BOOKMARKS, NewBookmark, PlaybackSession, Progress, Result, SCHEMA_VERSION, Video,
+    VideoEntry, storage::Store, validate_id, validate_note, validate_range, validate_rate,
+    validate_seconds,
 };
 
 struct Session {
@@ -83,6 +84,7 @@ impl LibraryService {
             duration: 0.0,
             position: 0.0,
             playback_rate: 1.0,
+            color_adjustments: None,
             cover_id: None,
             bookmarks: Vec::new(),
             created_at_ms: stamp,
@@ -141,6 +143,9 @@ impl LibraryService {
         validate_seconds(progress.position)?;
         validate_seconds(progress.duration)?;
         validate_rate(progress.playback_rate)?;
+        if let Some(colors) = progress.color_adjustments {
+            colors.validate()?;
+        }
         if progress.duration <= 0.0 {
             return Err(CoreError::Invalid("動画の長さが不明です".into()));
         }
@@ -156,6 +161,10 @@ impl LibraryService {
         video.duration = progress.duration;
         video.position = progress.position.min(progress.duration);
         video.playback_rate = progress.playback_rate;
+        if let Some(colors) = progress.color_adjustments {
+            video.color_adjustments = Some(colors);
+            video.schema_version = SCHEMA_VERSION;
+        }
         self.store.save(&video)?;
         session.revision = revision;
         Ok(())
@@ -165,6 +174,9 @@ impl LibraryService {
         validate_id(&input.id)?;
         validate_note(&input.note)?;
         validate_seconds(input.seconds)?;
+        if let Some(colors) = input.color_adjustments {
+            colors.validate()?;
+        }
         let _lock = self.lock()?;
         let mut video = self.store.load(id)?;
         validate_range(input.seconds, input.end_seconds, video.duration)?;
@@ -180,6 +192,10 @@ impl LibraryService {
             // or silently discard a note edited before that retry.
             existing.note = input.note.trim().into();
             existing.color = input.color;
+            existing.color_adjustments = input.color_adjustments;
+            if input.color_adjustments.is_some() {
+                video.schema_version = SCHEMA_VERSION;
+            }
             video.updated_at_ms = now();
             self.store.save(&video)?;
             return Ok(entry(video));
@@ -192,7 +208,7 @@ impl LibraryService {
         }
         self.store
             .save_thumbnail(&input.id, &input.thumbnail_data_url)?;
-        if input.end_seconds.is_some() {
+        if input.end_seconds.is_some() || input.color_adjustments.is_some() {
             video.schema_version = SCHEMA_VERSION;
         }
         video.cover_id.get_or_insert_with(|| input.id.clone());
@@ -200,6 +216,7 @@ impl LibraryService {
             id: input.id.clone(),
             seconds: input.seconds.min(video.duration),
             end_seconds: input.end_seconds,
+            color_adjustments: input.color_adjustments,
             note: input.note.trim().into(),
             color: input.color,
             thumbnail_id: input.id,
@@ -217,8 +234,12 @@ impl LibraryService {
         note: &str,
         color: BookmarkColor,
         end_seconds: Option<f64>,
+        color_adjustments: Option<ColorAdjustments>,
     ) -> Result<VideoEntry> {
         validate_note(note)?;
+        if let Some(colors) = color_adjustments {
+            colors.validate()?;
+        }
         let _lock = self.lock()?;
         let mut video = self.store.load(id)?;
         let bookmark = video
@@ -228,7 +249,8 @@ impl LibraryService {
             .ok_or(CoreError::NotFound)?;
         validate_range(bookmark.seconds, end_seconds, video.duration)?;
         bookmark.end_seconds = end_seconds;
-        if end_seconds.is_some() {
+        bookmark.color_adjustments = color_adjustments;
+        if end_seconds.is_some() || color_adjustments.is_some() {
             video.schema_version = SCHEMA_VERSION;
         }
         bookmark.note = note.trim().into();

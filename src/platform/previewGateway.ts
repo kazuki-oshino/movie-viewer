@@ -1,3 +1,4 @@
+import { type ColorAdjustments, validateColors } from '../domain/visual';
 import type {
   BookmarkColor,
   LibraryListing,
@@ -93,12 +94,14 @@ export class PreviewGateway implements LibraryGateway {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error('再生セッションが見つかりません。');
     if (revision <= session.revision) return;
-    Object.assign(this.get(session.videoId), progress);
+    validateColors(progress.colorAdjustments);
+    Object.assign(this.get(session.videoId), structuredClone(progress));
     session.revision = revision;
   }
   async addBookmark(id: string, input: NewBookmark) {
     const video = this.get(id);
     this.validateRange(input.seconds, input.endSeconds, video.duration);
+    validateColors(input.colorAdjustments);
     const existing = video.bookmarks.find((bookmark) => bookmark.id === input.id);
     if (existing) {
       if (
@@ -106,13 +109,18 @@ export class PreviewGateway implements LibraryGateway {
         (existing.endSeconds ?? null) !== (input.endSeconds ?? null)
       )
         throw new Error('同じしおりIDで時刻を変更できません');
-      Object.assign(existing, { note: input.note.trim(), color: input.color });
+      Object.assign(existing, {
+        note: input.note.trim(),
+        color: input.color,
+        colorAdjustments: structuredClone(input.colorAdjustments ?? null),
+      });
     } else {
       video.bookmarks.push({
         id: input.id,
         note: input.note.trim(),
         seconds: input.seconds,
         endSeconds: input.endSeconds ?? null,
+        colorAdjustments: structuredClone(input.colorAdjustments ?? null),
         color: input.color,
         thumbnailId: input.id,
         createdAtMs: Date.now(),
@@ -127,12 +135,19 @@ export class PreviewGateway implements LibraryGateway {
     note: string,
     color: BookmarkColor,
     endSeconds: number | null = null,
+    colorAdjustments: ColorAdjustments | null = null,
   ) {
     const video = this.get(id);
     const bookmark = video.bookmarks.find((item) => item.id === bookmarkId);
     if (!bookmark) throw new Error('しおりが見つかりません。');
     this.validateRange(bookmark.seconds, endSeconds, video.duration);
-    Object.assign(bookmark, { note: note.trim(), color, endSeconds });
+    validateColors(colorAdjustments);
+    Object.assign(bookmark, {
+      note: note.trim(),
+      color,
+      endSeconds,
+      colorAdjustments: structuredClone(colorAdjustments),
+    });
     return structuredClone(video);
   }
   private validateRange(start: number, end: number | null | undefined, duration: number) {

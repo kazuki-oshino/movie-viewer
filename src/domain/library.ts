@@ -1,3 +1,4 @@
+import type { ColorAdjustments } from './visual';
 export type BookmarkColor = 'sage' | 'amber' | 'blue' | 'rose';
 export type Availability = 'available' | 'missing' | 'changed' | 'inaccessible';
 
@@ -5,6 +6,7 @@ export interface Bookmark {
   id: string;
   seconds: number;
   endSeconds?: number | null;
+  colorAdjustments?: ColorAdjustments | null;
   note: string;
   color: BookmarkColor;
   thumbnailId: string;
@@ -22,6 +24,7 @@ export interface VideoEntry {
   duration: number;
   position: number;
   playbackRate: number;
+  colorAdjustments?: ColorAdjustments | null;
   coverId: string | null;
   bookmarks: Bookmark[];
   createdAtMs: number;
@@ -44,12 +47,14 @@ export interface Progress {
   position: number;
   duration: number;
   playbackRate: number;
+  colorAdjustments?: ColorAdjustments | null;
 }
 
 export interface NewBookmark {
   id: string;
   seconds: number;
   endSeconds?: number | null;
+  colorAdjustments?: ColorAdjustments | null;
   note: string;
   color: BookmarkColor;
   thumbnailDataUrl: string;

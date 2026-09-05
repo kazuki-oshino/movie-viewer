@@ -1,3 +1,4 @@
+import type { ColorAdjustments } from '../domain/visual';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -58,8 +59,16 @@ export class TauriGateway implements LibraryGateway {
     note: string,
     color: BookmarkColor,
     endSeconds: number | null = null,
+    colorAdjustments: ColorAdjustments | null = null,
   ) {
-    return invoke<VideoEntry>('edit_bookmark', { id, bookmarkId, note, color, endSeconds });
+    return invoke<VideoEntry>('edit_bookmark', {
+      id,
+      bookmarkId,
+      note,
+      color,
+      endSeconds,
+      colorAdjustments,
+    });
   }
   removeBookmark(id: string, bookmarkId: string) {
     return invoke<VideoEntry>('remove_bookmark', { id, bookmarkId });

@@ -35,6 +35,7 @@ impl Fixture {
                     position: 42.0,
                     duration: 120.0,
                     playback_rate: 1.5,
+                    color_adjustments: None,
                 },
             )
             .unwrap();
@@ -51,6 +52,7 @@ impl Fixture {
             id: uuid::Uuid::new_v4().to_string(),
             seconds,
             end_seconds: None,
+            color_adjustments: None,
             note: "  大切な説明\nここを見返す  ".into(),
             color: BookmarkColor::Amber,
             thumbnail_data_url: jpeg(),
@@ -155,6 +157,7 @@ fn missing_video_keeps_bookmarks_readable_and_editable() {
             "移動してもメモは残る",
             BookmarkColor::Blue,
             None,
+            None,
         )
         .unwrap();
     assert_eq!(entry.availability, Availability::Missing);
@@ -223,6 +226,7 @@ fn progress_never_overwrites_a_bookmark_or_rename() {
                 position: 81.0,
                 duration: 120.0,
                 playback_rate: 0.1,
+                color_adjustments: None,
             },
         )
         .unwrap();
@@ -244,6 +248,7 @@ fn old_revisions_and_previous_sessions_cannot_overwrite_newer_progress() {
                 position: 81.0,
                 duration: 120.0,
                 playback_rate: 2.0,
+                color_adjustments: None,
             },
         )
         .unwrap();
@@ -255,6 +260,7 @@ fn old_revisions_and_previous_sessions_cannot_overwrite_newer_progress() {
                 position: 11.0,
                 duration: 120.0,
                 playback_rate: 0.1,
+                color_adjustments: None,
             },
         )
         .unwrap();
@@ -267,7 +273,8 @@ fn old_revisions_and_previous_sessions_cannot_overwrite_newer_progress() {
             Progress {
                 position: 11.0,
                 duration: 120.0,
-                playback_rate: 1.0
+                playback_rate: 1.0,
+                color_adjustments: None,
             }
         ),
         Err(CoreError::StaleSession)
@@ -288,7 +295,8 @@ fn invalid_times_rates_notes_and_images_never_replace_saved_metadata() {
                     Progress {
                         position: 0.0,
                         duration: 120.0,
-                        playback_rate: rate
+                        playback_rate: rate,
+                        color_adjustments: None,
                     }
                 )
                 .is_err()
@@ -505,7 +513,7 @@ fn legacy_point_bookmarks_stay_readable_and_range_bookmarks_survive_restart() {
     let mut range = f.bookmark(10.2);
     range.end_seconds = Some(20.7);
     let saved = f.service.add_bookmark(&id, range.clone()).unwrap().video;
-    assert_eq!(saved.schema_version, 2);
+    assert_eq!(saved.schema_version, 3);
     assert_eq!(saved.bookmarks[0].id, point.id);
     f.service.add_bookmark(&id, range.clone()).unwrap();
     drop(f.service);
@@ -514,7 +522,14 @@ fn legacy_point_bookmarks_stay_readable_and_range_bookmarks_survive_restart() {
     assert_eq!(restored.bookmarks, saved.bookmarks);
     assert_eq!(restored.bookmarks[1].end_seconds, Some(20.7));
     let converted = reopened
-        .edit_bookmark(&id, &range.id, "地点へ変更", BookmarkColor::Sage, None)
+        .edit_bookmark(
+            &id,
+            &range.id,
+            "地点へ変更",
+            BookmarkColor::Sage,
+            None,
+            None,
+        )
         .unwrap()
         .video;
     assert_eq!(converted.bookmarks[1].seconds, 10.2);
@@ -527,6 +542,7 @@ fn legacy_point_bookmarks_stay_readable_and_range_bookmarks_survive_restart() {
             "区間へ変更",
             BookmarkColor::Blue,
             Some(12.0),
+            None,
         )
         .unwrap()
         .video;
@@ -548,7 +564,7 @@ fn invalid_repeat_endpoints_never_change_saved_bookmarks() {
         assert!(f.service.add_bookmark(&id, invalid).is_err());
         assert!(
             f.service
-                .edit_bookmark(&id, &range.id, "変更", BookmarkColor::Blue, Some(end))
+                .edit_bookmark(&id, &range.id, "変更", BookmarkColor::Blue, Some(end), None)
                 .is_err()
         );
         assert_eq!(fs::read(f.record(&id)).unwrap(), before);
@@ -557,6 +573,155 @@ fn invalid_repeat_endpoints_never_change_saved_bookmarks() {
     assert!(f.service.add_bookmark(&id, range.clone()).is_err());
     assert_eq!(fs::read(f.record(&id)).unwrap(), before);
     f.service
-        .edit_bookmark(&id, &range.id, "末尾まで", BookmarkColor::Sage, Some(120.0))
+        .edit_bookmark(
+            &id,
+            &range.id,
+            "末尾まで",
+            BookmarkColor::Sage,
+            Some(120.0),
+            None,
+        )
         .unwrap();
+}
+
+#[test]
+fn color_settings_survive_restart_and_bookmark_edits_without_touching_source() {
+    use shiori_core::ColorAdjustments;
+    let f = Fixture::new();
+    let original = fs::read(&f.source).unwrap();
+    let (id, session) = f.ready();
+    let colors = ColorAdjustments {
+        brightness: 1.2,
+        contrast: 1.1,
+        saturation: 0.75,
+    };
+    f.service
+        .save_progress(
+            &session,
+            2,
+            Progress {
+                position: 20.0,
+                duration: 120.0,
+                playback_rate: 1.0,
+                color_adjustments: Some(colors),
+            },
+        )
+        .unwrap();
+    let mut point = f.bookmark(20.0);
+    point.color_adjustments = Some(colors);
+    f.service.add_bookmark(&id, point.clone()).unwrap();
+    let mut range = f.bookmark(30.0);
+    range.end_seconds = Some(40.0);
+    range.color_adjustments = Some(ColorAdjustments {
+        brightness: 1.5,
+        ..colors
+    });
+    f.service.add_bookmark(&id, range.clone()).unwrap();
+    f.service
+        .edit_bookmark(
+            &id,
+            &range.id,
+            "色調を変更",
+            BookmarkColor::Blue,
+            Some(40.0),
+            Some(colors),
+        )
+        .unwrap();
+    drop(f.service);
+    let service = LibraryService::new(f.temporary.path().join("data")).unwrap();
+    let video = service.list().unwrap().videos.remove(0).video;
+    assert_eq!(video.color_adjustments, Some(colors));
+    assert_eq!(video.schema_version, 3);
+    assert!(
+        video
+            .bookmarks
+            .iter()
+            .all(|b| b.color_adjustments == Some(colors))
+    );
+    assert_eq!(video.bookmarks[1].end_seconds, Some(40.0));
+    assert_eq!(fs::read(&f.source).unwrap(), original);
+}
+
+#[test]
+fn old_colorless_records_stay_readable_and_invalid_colors_do_not_write() {
+    use shiori_core::ColorAdjustments;
+    let f = Fixture::new();
+    let (id, session) = f.ready();
+    let point = f.bookmark(20.0);
+    f.service.add_bookmark(&id, point.clone()).unwrap();
+    let mut record: serde_json::Value =
+        serde_json::from_slice(&fs::read(f.record(&id)).unwrap()).unwrap();
+    for version in [1, 2] {
+        record["schemaVersion"] = version.into();
+        fs::write(f.record(&id), serde_json::to_vec(&record).unwrap()).unwrap();
+        let before = fs::read(f.record(&id)).unwrap();
+        let video = f.service.list().unwrap().videos.remove(0).video;
+        assert_eq!(video.color_adjustments, None);
+        assert_eq!(video.bookmarks[0].color_adjustments, None);
+        assert_eq!(fs::read(f.record(&id)).unwrap(), before);
+    }
+    let before = fs::read(f.record(&id)).unwrap();
+    for value in [f64::NAN, f64::INFINITY, -1.0, 2.01] {
+        let bad = ColorAdjustments {
+            brightness: value,
+            contrast: 1.0,
+            saturation: 1.0,
+        };
+        let mut input = f.bookmark(21.0);
+        input.color_adjustments = Some(bad);
+        assert!(f.service.add_bookmark(&id, input).is_err());
+        assert!(
+            f.service
+                .edit_bookmark(
+                    &id,
+                    &point.id,
+                    "invalid",
+                    BookmarkColor::Sage,
+                    None,
+                    Some(bad)
+                )
+                .is_err()
+        );
+        assert!(
+            f.service
+                .save_progress(
+                    &session,
+                    2,
+                    Progress {
+                        position: 0.0,
+                        duration: 120.0,
+                        playback_rate: 1.0,
+                        color_adjustments: Some(bad)
+                    }
+                )
+                .is_err()
+        );
+        assert_eq!(fs::read(f.record(&id)).unwrap(), before);
+    }
+    for bad in [
+        ColorAdjustments {
+            brightness: 0.49,
+            contrast: 1.0,
+            saturation: 1.0,
+        },
+        ColorAdjustments {
+            brightness: 1.0,
+            contrast: 0.49,
+            saturation: 1.0,
+        },
+        ColorAdjustments {
+            brightness: 1.0,
+            contrast: 1.0,
+            saturation: -0.01,
+        },
+    ] {
+        assert!(bad.validate().is_err());
+    }
+    ColorAdjustments {
+        brightness: 0.5,
+        contrast: 2.0,
+        saturation: 0.0,
+    }
+    .validate()
+    .unwrap();
 }

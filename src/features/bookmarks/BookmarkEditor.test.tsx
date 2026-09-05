@@ -34,10 +34,18 @@ it('既存の地点を区間に変更し、不正なBを拒否し、地点へ戻
   await user.clear(end);
   await user.type(end, '10.5');
   await user.click(screen.getByRole('button', { name: /変更を保存/ }));
-  expect(onSave).toHaveBeenLastCalledWith('練習', 'sage', 10.5);
+  expect(onSave).toHaveBeenLastCalledWith('練習', 'sage', 10.5, {
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+  });
   expect(await screen.findByRole('alert')).toHaveTextContent('保存に失敗');
   expect(end).toHaveValue(10.5);
   await user.click(screen.getByRole('radio', { name: '地点から再生' }));
   await user.click(screen.getByRole('button', { name: /変更を保存/ }));
-  expect(onSave).toHaveBeenLastCalledWith('練習', 'sage', null);
+  expect(onSave).toHaveBeenLastCalledWith('練習', 'sage', null, {
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+  });
 });

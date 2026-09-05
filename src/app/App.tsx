@@ -1,3 +1,4 @@
+import type { ColorAdjustments } from '../domain/visual';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bookmark,
@@ -41,6 +42,7 @@ interface Opened {
   session: PlaybackSession;
   initialSeconds?: number;
   initialEndSeconds?: number | null;
+  initialColors?: ColorAdjustments | null;
   autoplay: boolean;
 }
 interface SourceError {
@@ -48,6 +50,7 @@ interface SourceError {
   message: string;
   seconds?: number;
   endSeconds?: number | null;
+  colorAdjustments?: ColorAdjustments | null;
 }
 
 export function App({ gateway }: { gateway: LibraryGateway }) {
@@ -184,6 +187,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
     video: VideoEntry,
     seconds?: number,
     endSeconds?: number | null,
+    colorAdjustments?: ColorAdjustments | null,
   ) {
     if (actionLock.current || quitting.current) return;
     if (
@@ -192,7 +196,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
       seconds !== undefined &&
       player.current
     ) {
-      player.current.playBookmark({ seconds, endSeconds });
+      player.current.playBookmark({ seconds, endSeconds, colorAdjustments });
       return;
     }
     actionLock.current = true;
@@ -209,13 +213,20 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
         session,
         initialSeconds: seconds,
         initialEndSeconds: endSeconds,
+        initialColors: colorAdjustments,
         autoplay: seconds !== undefined,
       });
       setView('player');
       setSourceError(null);
     } catch (error) {
       if (openingSource)
-        setSourceError({ video, message: errorMessage(error), seconds, endSeconds });
+        setSourceError({
+          video,
+          message: errorMessage(error),
+          seconds,
+          endSeconds,
+          colorAdjustments,
+        });
       else notify(errorMessage(error), true);
     } finally {
       actionLock.current = false;
@@ -278,7 +289,12 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
     }
   }
 
-  async function relink(video: VideoEntry, seconds?: number, endSeconds?: number | null) {
+  async function relink(
+    video: VideoEntry,
+    seconds?: number,
+    endSeconds?: number | null,
+    colorAdjustments?: ColorAdjustments | null,
+  ) {
     if (actionLock.current || quitting.current) return;
     if (!gateway.isNative) {
       notify('ファイルの再指定はmacOSアプリ版で利用できます。');
@@ -304,16 +320,27 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
     } catch (error) {
       if (choosingSource) {
         setInfo(null);
-        setSourceError({ video, message: errorMessage(error), seconds, endSeconds });
+        setSourceError({
+          video,
+          message: errorMessage(error),
+          seconds,
+          endSeconds,
+          colorAdjustments,
+        });
       } else notify(errorMessage(error), true);
     } finally {
       setBusy('');
       actionLock.current = false;
     }
-    if (updated) await openVideo(updated, seconds, endSeconds);
+    if (updated) await openVideo(updated, seconds, endSeconds, colorAdjustments);
   }
 
-  function beginNewBookmark(frame: CapturedFrame, duration: number, endSeconds?: number) {
+  function beginNewBookmark(
+    frame: CapturedFrame,
+    duration: number,
+    endSeconds?: number,
+    colorAdjustments?: ColorAdjustments,
+  ) {
     if (!activeVideo || quitting.current) return;
     setEditor({
       kind: 'new',
@@ -321,6 +348,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
       videoId: activeVideo.id,
       videoTitle: activeVideo.title,
       seconds: frame.seconds,
+      colorAdjustments,
       endSeconds,
       duration,
       thumbnail: frame.dataUrl,
@@ -337,6 +365,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
       videoId: video.id,
       videoTitle: video.title,
       seconds: bookmark.seconds,
+      colorAdjustments: bookmark.colorAdjustments,
       endSeconds: bookmark.endSeconds,
       duration: video.duration,
       thumbnail: gateway.thumbnailUrl(bookmark.thumbnailId),
@@ -674,6 +703,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
               gateway={gateway}
               initialSeconds={opened.initialSeconds}
               initialEndSeconds={opened.initialEndSeconds}
+              initialColors={opened.initialColors}
               autoplay={opened.autoplay}
               focused={focused}
               onToggleFocus={() => setFocused((current) => !current)}
@@ -694,8 +724,8 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
               videos={videos}
               gateway={gateway}
               query={query}
-              onOpen={(video, seconds, endSeconds) =>
-                void openVideo(video, seconds, endSeconds)
+              onOpen={(video, seconds, endSeconds, colors) =>
+                void openVideo(video, seconds, endSeconds, colors)
               }
               onEdit={beginEdit}
               onDelete={({ video, bookmark }) => setDeleting({ video, bookmark })}
@@ -736,18 +766,26 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
         <BookmarkEditor
           draft={editor}
           onClose={() => setEditor(null)}
-          onSave={async (note, color, endSeconds) => {
+          onSave={async (note, color, endSeconds, colorAdjustments) => {
             const updated = await tracked(
               editor.kind === 'new'
                 ? gateway.addBookmark(editor.videoId, {
                     id: editor.id,
                     seconds: editor.seconds,
                     endSeconds,
+                    colorAdjustments,
                     note,
                     color,
                     thumbnailDataUrl: editor.thumbnail,
                   })
-                : gateway.editBookmark(editor.videoId, editor.id, note, color, endSeconds),
+                : gateway.editBookmark(
+                    editor.videoId,
+                    editor.id,
+                    note,
+                    color,
+                    endSeconds,
+                    colorAdjustments,
+                  ),
             );
             mergeVideo(updated);
             setEditor(null);
@@ -855,7 +893,12 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
               variant="primary"
               disabled={!!busy || !gateway.isNative}
               onClick={() =>
-                void relink(sourceError.video, sourceError.seconds, sourceError.endSeconds)
+                void relink(
+                  sourceError.video,
+                  sourceError.seconds,
+                  sourceError.endSeconds,
+                  sourceError.colorAdjustments,
+                )
               }
             >
               <FolderInput size={16} />

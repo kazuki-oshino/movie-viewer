@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CoreError, Result};
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 pub const MAX_NOTE_LENGTH: usize = 4_000;
 pub const MAX_BOOKMARKS: usize = 10_000;
 
@@ -17,6 +17,29 @@ pub enum BookmarkColor {
     Rose,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ColorAdjustments {
+    pub brightness: f64,
+    pub contrast: f64,
+    pub saturation: f64,
+}
+
+impl ColorAdjustments {
+    pub fn validate(&self) -> Result<()> {
+        if !self.brightness.is_finite()
+            || !(0.5..=2.0).contains(&self.brightness)
+            || !self.contrast.is_finite()
+            || !(0.5..=2.0).contains(&self.contrast)
+            || !self.saturation.is_finite()
+            || !(0.0..=2.0).contains(&self.saturation)
+        {
+            return Err(CoreError::Invalid("色調の値が範囲外です".into()));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Bookmark {
@@ -24,6 +47,8 @@ pub struct Bookmark {
     pub seconds: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_adjustments: Option<ColorAdjustments>,
     pub note: String,
     pub color: BookmarkColor,
     pub thumbnail_id: String,
@@ -43,6 +68,8 @@ pub struct Video {
     pub duration: f64,
     pub position: f64,
     pub playback_rate: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_adjustments: Option<ColorAdjustments>,
     pub cover_id: Option<String>,
     pub bookmarks: Vec<Bookmark>,
     pub created_at_ms: u64,
@@ -88,6 +115,8 @@ pub struct NewBookmark {
     pub seconds: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_adjustments: Option<ColorAdjustments>,
     pub note: String,
     pub color: BookmarkColor,
     pub thumbnail_data_url: String,
@@ -99,6 +128,8 @@ pub struct Progress {
     pub position: f64,
     pub duration: f64,
     pub playback_rate: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_adjustments: Option<ColorAdjustments>,
 }
 
 pub fn validate_id(id: &str) -> Result<()> {
@@ -160,6 +191,12 @@ impl Video {
         validate_seconds(self.duration)?;
         validate_seconds(self.position)?;
         validate_rate(self.playback_rate)?;
+        if let Some(colors) = self.color_adjustments {
+            colors.validate()?;
+            if self.schema_version < 3 {
+                return Err(CoreError::Invalid("色調の保存形式".into()));
+            }
+        }
         if self.duration > 0.0 && self.position > self.duration + 0.1 {
             return Err(CoreError::Invalid("動画の長さを超える再生位置".into()));
         }
@@ -172,6 +209,12 @@ impl Video {
             validate_id(&bookmark.thumbnail_id)?;
             validate_seconds(bookmark.seconds)?;
             validate_note(&bookmark.note)?;
+            if let Some(colors) = bookmark.color_adjustments {
+                colors.validate()?;
+                if self.schema_version < 3 {
+                    return Err(CoreError::Invalid("しおりの色調の保存形式".into()));
+                }
+            }
             validate_range(bookmark.seconds, bookmark.end_seconds, self.duration)?;
             if self.schema_version == 1 && bookmark.end_seconds.is_some() {
                 return Err(CoreError::Invalid("区間しおりの保存形式".into()));

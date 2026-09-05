@@ -2954,3 +2954,162 @@ textarea::placeholder {
 .bookmark-range-fields small {
   color: var(--muted);
 }
+
+/* 映像の見え方だけを調整する */
+.player-view {
+  position: relative;
+}
+.visual-active {
+  color: var(--green);
+  background: #e2e8d9;
+}
+.visual-panel {
+  position: absolute;
+  z-index: 30;
+  top: 52px;
+  right: 12px;
+  width: min(328px, calc(100% - 24px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+  background: #fafbf6;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 7%),
+    0 12px 35px rgb(25 45 30 / 18%);
+}
+.visual-panel-heading,
+.zoom-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.visual-panel h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.visual-panel h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.visual-panel input[type='range'],
+.color-adjustments input[type='range'] {
+  width: 100%;
+  min-height: 40px;
+  accent-color: var(--green);
+}
+.adjustment-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.adjustment-row label,
+.adjustment-row output {
+  font-size: 11px;
+}
+.adjustment-row input {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.adjustment-row output,
+.zoom-heading output {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 11px;
+}
+.adjustment-presets,
+.zoom-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 4px 0 8px;
+}
+.adjustment-presets .button,
+.zoom-presets .button {
+  padding-inline: 9px;
+  font-size: 10px;
+}
+.zoom-presets .button[aria-pressed='true'] {
+  background: var(--green);
+  color: white;
+}
+.pan-controls {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+.visual-hint,
+.bookmark-color-settings p {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
+.bookmark-color-settings {
+  margin: 0 0 16px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #edf1e7;
+}
+.bookmark-color-settings summary {
+  display: list-item;
+  min-height: 40px;
+  line-height: 40px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.video-stage.is-zoomed {
+  touch-action: none;
+  cursor: grab;
+}
+.video-stage.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.video-stage video {
+  transform-origin: center;
+}
+.timeline {
+  position: relative;
+}
+.timeline-preview {
+  position: absolute;
+  z-index: 12;
+  bottom: calc(100% + 10px);
+  width: 180px;
+  height: 118px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #141715;
+  color: white;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 12%),
+    0 5px 18px rgb(0 0 0 / 20%);
+}
+.timeline-preview video {
+  width: 100%;
+  height: 94px;
+  object-fit: contain;
+}
+.timeline-preview > span {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.preview-loading {
+  position: absolute;
+  inset: 0 0 24px;
+  display: grid;
+  place-items: center;
+  background: #202722;
+  font-size: 10px;
+  color: #d8dfd8;
+}

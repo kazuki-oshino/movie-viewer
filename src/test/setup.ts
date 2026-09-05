@@ -9,6 +9,7 @@ HTMLDialogElement.prototype.showModal = function () {
 HTMLDialogElement.prototype.close = function () {
   this.removeAttribute('open');
 };
+HTMLMediaElement.prototype.load = vi.fn();
 HTMLMediaElement.prototype.play = vi.fn(async function (this: HTMLMediaElement) {
   Object.defineProperty(this, 'paused', { configurable: true, value: false });
   this.dispatchEvent(new Event('play'));

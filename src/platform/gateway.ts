@@ -1,3 +1,4 @@
+import type { ColorAdjustments } from '../domain/visual';
 import type {
   BookmarkColor,
   LibraryListing,
@@ -24,6 +25,7 @@ export interface LibraryGateway {
     note: string,
     color: BookmarkColor,
     endSeconds?: number | null,
+    colorAdjustments?: ColorAdjustments | null,
   ): Promise<VideoEntry>;
   removeBookmark(id: string, bookmarkId: string): Promise<VideoEntry>;
   saveCover(id: string, dataUrl: string): Promise<VideoEntry>;

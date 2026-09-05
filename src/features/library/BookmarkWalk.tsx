@@ -49,7 +49,10 @@ export function BookmarkWalk({
       {item ? (
         <>
           <div className="walk-image">
-            <Thumbnail src={gateway.thumbnailUrl(item.bookmark.thumbnailId)} />
+            <Thumbnail
+              src={gateway.thumbnailUrl(item.bookmark.thumbnailId)}
+              colorAdjustments={item.bookmark.colorAdjustments}
+            />
             <span className={`bookmark-time color-${item.bookmark.color}`}>
               {bookmarkTime(item.bookmark)}
               {item.bookmark.endSeconds != null && ' ↻'}

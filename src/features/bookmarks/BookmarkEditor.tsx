@@ -1,3 +1,5 @@
+import { ColorControls } from '../../components/ColorControls';
+import { colorsOrOriginal, type ColorAdjustments } from '../../domain/visual';
 import { useState } from 'react';
 import { Bookmark as BookmarkIcon, Check, CircleAlert } from 'lucide-react';
 import { COLORS, errorMessage, formatTime, type BookmarkColor } from '../../domain/library';
@@ -11,6 +13,7 @@ export interface BookmarkDraft {
   videoId: string;
   videoTitle: string;
   seconds: number;
+  colorAdjustments?: ColorAdjustments | null;
   endSeconds?: number | null;
   duration: number;
   thumbnail: string;
@@ -25,10 +28,18 @@ export function BookmarkEditor({
   onDelete,
 }: {
   draft: BookmarkDraft;
-  onSave(note: string, color: BookmarkColor, endSeconds: number | null): Promise<void>;
+  onSave(
+    note: string,
+    color: BookmarkColor,
+    endSeconds: number | null,
+    colorAdjustments: ColorAdjustments,
+  ): Promise<void>;
   onClose(): void;
   onDelete?(): void;
 }) {
+  const [colorAdjustments, setColorAdjustments] = useState(() =>
+    colorsOrOriginal(draft.colorAdjustments),
+  );
   const [note, setNote] = useState(draft.note);
   const [color, setColor] = useState(draft.color);
   const [isRange, setIsRange] = useState(draft.endSeconds != null);
@@ -53,7 +64,7 @@ export function BookmarkEditor({
     setSaving(true);
     setError('');
     try {
-      await onSave(note.trim(), color, isRange ? endSeconds : null);
+      await onSave(note.trim(), color, isRange ? endSeconds : null, colorAdjustments);
     } catch (cause) {
       setError(errorMessage(cause));
       setSaving(false);
@@ -67,7 +78,7 @@ export function BookmarkEditor({
       className="bookmark-editor"
     >
       <div className="editor-preview">
-        <Thumbnail src={draft.thumbnail} />
+        <Thumbnail src={draft.thumbnail} colorAdjustments={colorAdjustments} />
         <div>
           <span className={`bookmark-time color-${color}`}>
             <BookmarkIcon size={13} />
@@ -135,6 +146,15 @@ export function BookmarkEditor({
             </small>
           </div>
         )}
+        <details className="bookmark-color-settings">
+          <summary>このしおりに保存する色調</summary>
+          <ColorControls
+            value={colorAdjustments}
+            onChange={setColorAdjustments}
+            disabled={saving}
+          />
+          <p>保存した色調でサムネイルを表示し、再生時にも復元します。</p>
+        </details>
         <label className="field-label" htmlFor="bookmark-note">
           あとで見返したいこと
         </label>

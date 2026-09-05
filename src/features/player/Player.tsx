@@ -1,3 +1,13 @@
+import { TimelinePreview } from './TimelinePreview';
+import {
+  type ColorAdjustments,
+  colorsOrOriginal,
+  colorFilter,
+  ORIGINAL_COLORS,
+  hasColorAdjustments,
+} from '../../domain/visual';
+import { VisualControls } from './VisualControls';
+import { useVideoZoom } from './useVideoZoom';
 import {
   forwardRef,
   useCallback,
@@ -13,6 +23,7 @@ import {
   Check,
   CircleAlert,
   Gauge,
+  SlidersHorizontal,
   Info,
   Maximize,
   PanelLeftClose,
@@ -52,7 +63,9 @@ export interface PlayerHandle {
   togglePlay(): void;
   skip(seconds: number): void;
   seek(seconds: number, autoplay?: boolean): void;
-  playBookmark(bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>): void;
+  playBookmark(
+    bookmark: Pick<Bookmark, 'seconds' | 'endSeconds' | 'colorAdjustments'>,
+  ): void;
   bookmark(): Promise<void>;
 }
 
@@ -62,13 +75,19 @@ interface Props {
   gateway: LibraryGateway;
   initialSeconds?: number;
   initialEndSeconds?: number | null;
+  initialColors?: ColorAdjustments | null;
   autoplay?: boolean;
   focused: boolean;
   onToggleFocus(): void;
   onBack(): void;
   onInfo(): void;
   onRelink(): void;
-  onBookmark(frame: CapturedFrame, duration: number, endSeconds?: number): void;
+  onBookmark(
+    frame: CapturedFrame,
+    duration: number,
+    endSeconds?: number,
+    colorAdjustments?: ColorAdjustments,
+  ): void;
   onEdit(bookmark: Bookmark): void;
   onUpdated(video: VideoEntry): void;
   onNotice(message: string): void;
@@ -81,6 +100,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     gateway,
     initialSeconds,
     initialEndSeconds,
+    initialColors,
     autoplay = false,
     focused,
     onToggleFocus,
@@ -95,6 +115,20 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [colors, setColors] = useState(() =>
+    colorsOrOriginal(
+      initialSeconds === undefined ? session.video.colorAdjustments : initialColors,
+    ),
+  );
+  const colorsRef = useRef(colors);
+  const [previewAt, setPreviewAt] = useState<{ seconds: number; percent: number } | null>(
+    null,
+  );
+  const [visualOpen, setVisualOpen] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [aspect, setAspect] = useState(16 / 9);
+  const zoom = useVideoZoom(aspect);
+  const displayedColors = comparing ? ORIGINAL_COLORS : colors;
   const [playing, setPlaying] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [position, setPosition] = useState(0);
@@ -174,9 +208,20 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         position: clampTime(video.currentTime, video.duration),
         duration: video.duration,
         playbackRate: video.playbackRate,
+        colorAdjustments: { ...colorsRef.current },
       });
     },
     [queue],
+  );
+
+  const changeColors = useCallback(
+    (value: ColorAdjustments) => {
+      colorsRef.current = { ...value };
+      setColors({ ...value });
+      setComparing(false);
+      saveSnapshot(true);
+    },
+    [saveSnapshot],
   );
 
   const flush = useCallback(async () => {
@@ -252,9 +297,10 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   );
 
   const playBookmark = useCallback(
-    (bookmark: Pick<Bookmark, 'seconds' | 'endSeconds'>) => {
+    (bookmark: Pick<Bookmark, 'seconds' | 'endSeconds' | 'colorAdjustments'>) => {
       const video = videoRef.current;
       if (!video || !loaded || mediaError || capturingRef.current) return;
+      changeColors(colorsOrOriginal(bookmark.colorAdjustments));
       setRepeatRange(
         bookmark.endSeconds == null
           ? EMPTY_REPEAT
@@ -270,7 +316,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       setPosition(video.currentTime);
       play(true);
     },
-    [loaded, mediaError, play],
+    [loaded, mediaError, play, changeColors],
   );
 
   const addBookmark = useCallback(
@@ -321,7 +367,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         }
         const frame = await captureFrame(video);
         await flush(); // Persist duration before the bookmark is committed.
-        onBookmark(frame, video.duration, range?.end);
+        onBookmark(frame, video.duration, range?.end, { ...displayedColors });
       } catch (error) {
         onNotice(errorMessage(error));
       } finally {
@@ -329,7 +375,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         setCapturing(false);
       }
     },
-    [flush, loaded, mediaError, onBookmark, onNotice],
+    [flush, loaded, mediaError, onBookmark, onNotice, displayedColors],
   );
 
   useImperativeHandle(
@@ -364,6 +410,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       return;
     }
     setDuration(video.duration);
+    setAspect(video.videoWidth / video.videoHeight || 16 / 9);
     video.playbackRate = rate;
     video.volume = volume;
     // With preload=metadata, WebKit needs an explicit zero seek to request
@@ -455,6 +502,15 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           </div>
         </div>
         <div className="player-heading-actions">
+          <IconButton
+            label="映像の調整"
+            aria-controls="visual-controls"
+            aria-expanded={visualOpen}
+            onClick={() => setVisualOpen((v) => !v)}
+            className={hasColorAdjustments(colors) || zoom.zoom > 1 ? 'visual-active' : ''}
+          >
+            <SlidersHorizontal size={18} />
+          </IconButton>
           <Button
             variant="ghost"
             aria-label={repeatVisible ? '区間リピートの設定を閉じる' : '区間リピートを設定'}
@@ -493,11 +549,30 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           </IconButton>
         </div>
       </header>
+      {visualOpen && (
+        <VisualControls
+          colors={colors}
+          onColors={changeColors}
+          comparing={comparing}
+          onCompare={() => setComparing((v) => !v)}
+          zoom={zoom.zoom}
+          onZoom={zoom.setZoom}
+          onMove={zoom.move}
+          onCenter={zoom.center}
+          onClose={() => setVisualOpen(false)}
+          disabled={!loaded || !!mediaError || capturing}
+        />
+      )}
       <div className="player-columns">
         <section className="watch-area" aria-label="動画プレイヤー">
-          <div className="video-stage">
+          <div
+            className={`video-stage ${zoom.zoom > 1 ? 'is-zoomed' : ''} ${zoom.dragging ? 'is-dragging' : ''}`}
+            ref={zoom.stageRef}
+            {...zoom.handlers}
+          >
             <video
               ref={videoRef}
+              style={{ filter: colorFilter(displayedColors), transform: zoom.transform }}
               src={gateway.videoUrl(session.video)}
               preload="metadata"
               playsInline
@@ -575,7 +650,23 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             )}
           </div>
           <div className="playback-controls">
-            <div className="timeline">
+            <div
+              className="timeline"
+              onPointerLeave={() => setPreviewAt(null)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setPreviewAt(null);
+              }}
+            >
+              {previewAt && loaded && !mediaError && !capturing && (
+                <TimelinePreview
+                  sourceUrl={gateway.videoUrl(session.video)}
+                  seconds={previewAt.seconds}
+                  duration={duration}
+                  percent={previewAt.percent}
+                  colors={displayedColors}
+                />
+              )}
+
               <div
                 className="timeline-bar"
                 style={{ '--progress': `${progress}%` } as React.CSSProperties}
@@ -583,6 +674,34 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 <input
                   type="range"
                   aria-label="再生位置"
+                  onPointerMove={(event) => {
+                    if (event.pointerType === 'touch') return;
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const fraction = Math.max(
+                      0,
+                      Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)),
+                    );
+                    setPreviewAt({ seconds: fraction * duration, percent: fraction * 100 });
+                  }}
+                  onFocus={() => setPreviewAt({ seconds: position, percent: progress })}
+                  onKeyUp={(event) => {
+                    if (
+                      [
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'ArrowUp',
+                        'ArrowDown',
+                        'Home',
+                        'End',
+                      ].includes(event.key)
+                    ) {
+                      const seconds = Number(event.currentTarget.value);
+                      setPreviewAt({
+                        seconds,
+                        percent: duration ? (seconds / duration) * 100 : 0,
+                      });
+                    }
+                  }}
                   aria-valuetext={`${formatTime(position)} / ${formatTime(duration)}`}
                   min="0"
                   max={duration || 1}
@@ -815,7 +934,10 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                     aria-label={`${bookmarkAction(bookmark)}: ${bookmark.note}`}
                     onClick={() => playBookmark(bookmark)}
                   >
-                    <Thumbnail src={gateway.thumbnailUrl(bookmark.thumbnailId)} />
+                    <Thumbnail
+                      src={gateway.thumbnailUrl(bookmark.thumbnailId)}
+                      colorAdjustments={bookmark.colorAdjustments}
+                    />
                     <span className="player-bookmark-text">
                       <span className={`bookmark-time color-${bookmark.color}`}>
                         {bookmark.endSeconds == null ? (

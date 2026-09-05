@@ -1,3 +1,4 @@
+import type { ColorAdjustments } from '../../domain/visual';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownWideNarrow,
@@ -38,7 +39,12 @@ interface Props {
   videos: VideoEntry[];
   gateway: LibraryGateway;
   query: string;
-  onOpen(video: VideoEntry, seconds?: number, endSeconds?: number | null): void;
+  onOpen(
+    video: VideoEntry,
+    seconds?: number,
+    endSeconds?: number | null,
+    colorAdjustments?: ColorAdjustments | null,
+  ): void;
   onEdit(item: ShelfItem): void;
   onDelete(item: ShelfItem): void;
   onInfo(video: VideoEntry): void;
@@ -261,12 +267,20 @@ export function LibraryView({
                   <button
                     className="shelf-card-open"
                     onClick={() =>
-                      onOpen(item.video, item.bookmark.seconds, item.bookmark.endSeconds)
+                      onOpen(
+                        item.video,
+                        item.bookmark.seconds,
+                        item.bookmark.endSeconds,
+                        item.bookmark.colorAdjustments,
+                      )
                     }
                     aria-label={`${bookmarkAction(item.bookmark)}: ${item.bookmark.note}`}
                   >
                     <div className="shelf-image">
-                      <Thumbnail src={gateway.thumbnailUrl(item.bookmark.thumbnailId)} />
+                      <Thumbnail
+                        src={gateway.thumbnailUrl(item.bookmark.thumbnailId)}
+                        colorAdjustments={item.bookmark.colorAdjustments}
+                      />
                       <span className="thumbnail-time">
                         <Play size={11} fill="currentColor" />
                         {bookmarkTime(item.bookmark)}
@@ -420,7 +434,12 @@ export function LibraryView({
           onClose={() => setWalking(false)}
           onOpen={(item) => {
             setWalking(false);
-            onOpen(item.video, item.bookmark.seconds, item.bookmark.endSeconds);
+            onOpen(
+              item.video,
+              item.bookmark.seconds,
+              item.bookmark.endSeconds,
+              item.bookmark.colorAdjustments,
+            );
           }}
         />
       )}
