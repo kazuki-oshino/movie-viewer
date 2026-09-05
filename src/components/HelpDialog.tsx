@@ -14,6 +14,10 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
           <strong>説明や動きを繰り返し見る</strong>
           再生画面の「A–B」で設定を開き、始点Aと終点Bを現在位置から指定します。区間外へ移動すると解除されます。
         </p>
+        <p>
+          <strong>保存した気づきを再発見する</strong>
+          棚の「しおり散歩」で、絞り込み中のしおりをランダムにめくれます。気になった一枚から、その場面を再生できます。
+        </p>
       </div>
       <h3>
         <Keyboard size={17} />

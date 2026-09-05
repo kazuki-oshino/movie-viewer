@@ -1911,6 +1911,104 @@ select {
   border-color: #577b3e;
 }
 
+/* 棚から一枚ずつ見返す */
+.shelf-discovery {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 0 22px;
+  background: #edf1e7;
+  border-radius: 10px;
+  color: #657d52;
+}
+.shelf-discovery > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.shelf-discovery p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.shelf-discovery p > span {
+  margin-left: 12px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.walk-intro {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.walk-image {
+  position: relative;
+}
+.walk-image .thumbnail {
+  border-radius: 9px;
+}
+.walk-image > .bookmark-time {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 10%);
+}
+.walk-copy {
+  padding-top: 18px;
+}
+.walk-note {
+  font-size: 16px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.walk-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-top: 12px;
+}
+.walk-source svg {
+  margin-top: 2px;
+}
+.walk-source span {
+  overflow-wrap: anywhere;
+}
+.walk-count {
+  display: block;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 18px;
+}
+.walk-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+.walk-play {
+  width: 100%;
+}
+.walk-footnote,
+.walk-end {
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.walk-footnote {
+  margin-top: 12px;
+}
 .help-feature-notes {
   display: grid;
   gap: 12px;

@@ -14,6 +14,7 @@ import {
   Play,
   Plus,
   Search,
+  Shuffle,
   Trash2,
 } from 'lucide-react';
 import {
@@ -30,6 +31,7 @@ import {
 import type { LibraryGateway } from '../../platform/gateway';
 import { Button, IconButton } from '../../components/Button';
 import { Thumbnail } from '../../components/Thumbnail';
+import { BookmarkWalk } from './BookmarkWalk';
 
 interface Props {
   view: 'shelf' | 'videos' | 'recent';
@@ -61,6 +63,7 @@ export function LibraryView({
   const [sort, setSort] = useState<'newest' | 'timeline'>('newest');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [limit, setLimit] = useState(36);
+  const [walking, setWalking] = useState(false);
   const scroller = useRef<HTMLElement>(null);
   useEffect(() => {
     setLimit(36);
@@ -69,6 +72,7 @@ export function LibraryView({
   const validFilter = videos.some((video) => video.id === filter) ? filter : 'all';
   const allMarks = videos.reduce((count, video) => count + video.bookmarks.length, 0);
   const items = shelfItems(videos, query, validFilter, color, sort);
+  const walkItems = items.filter((item) => item.video.availability === 'available');
   const shownVideos = videos
     .filter(
       (video) =>
@@ -191,6 +195,25 @@ export function LibraryView({
               </IconButton>
             </div>
           </div>
+        </div>
+      )}
+      {shelf && allMarks > 0 && (
+        <div className="shelf-discovery">
+          <div>
+            <Shuffle size={17} />
+            <p>
+              いつもの棚から、思いがけない一枚。
+              <span>今の絞り込みから{walkItems.length}枚</span>
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => setWalking(true)}
+            disabled={!walkItems.length}
+          >
+            しおり散歩
+            <ArrowUpRight size={15} />
+          </Button>
         </div>
       )}
       {videos.length === 0 ? (
@@ -390,6 +413,17 @@ export function LibraryView({
         </span>
         <span>大切な瞬間に、しおりを。</span>
       </footer>
+      {walking && (
+        <BookmarkWalk
+          items={walkItems}
+          gateway={gateway}
+          onClose={() => setWalking(false)}
+          onOpen={(item) => {
+            setWalking(false);
+            onOpen(item.video, item.bookmark.seconds, item.bookmark.endSeconds);
+          }}
+        />
+      )}
     </section>
   );
 }
