@@ -515,6 +515,48 @@ describe('動画プレイヤー', () => {
     expect((await gateway.list()).videos[0].bookmarks).toHaveLength(4);
   });
 
+  it('集中モードの切り替えで再生を中断せず、しおりを追加して元の表示に戻れる', async () => {
+    const { user, gateway, container } = await demoApp();
+    const open = vi.spyOn(gateway, 'openVideo');
+    await user.click(
+      screen.getByRole('button', { name: '余白から考える、伝わるデザイン' }),
+    );
+    const video = container.querySelector('video')!;
+    ready(video);
+    video.currentTime = 32.5;
+    await user.click(screen.getByRole('button', { name: '再生' }));
+    await user.click(screen.getByRole('button', { name: /集中モード/ }));
+    expect(screen.getByRole('button', { name: /元の表示に戻す/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'この動画のしおり' })).toBeNull();
+    expect(container.querySelector('video')).toBe(video);
+    expect(video.currentTime).toBe(32.5);
+    expect(video.paused).toBe(false);
+    expect(open).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'しおりを追加 (B)' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('0:32');
+    await user.type(screen.getByRole('textbox', { name: 'あとで見返したいこと' }), 'test');
+    expect(screen.getByRole('button', { name: /元の表示に戻す/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: /しおりを保存/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('navigation')).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'この動画のしおり' })).toBeVisible();
+    expect(container.querySelector('video')).toBe(video);
+    expect((await gateway.list()).videos[0].bookmarks).toHaveLength(4);
+    await user.keyboard('t');
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'しおり棚に戻る' }));
+    expect(await screen.findByRole('navigation')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'しおり・動画を検索' })).toBeEnabled();
+  });
+
   it('コンパクトな操作バーでも音量・ミュート・フルスクリーンを操作できる', async () => {
     const { user, gateway, container } = await demoApp();
     const fullscreen = vi.spyOn(gateway, 'toggleFullscreen');

@@ -54,6 +54,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [view, setView] = useState<View>('shelf');
+  const [focused, setFocused] = useState(false);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState('');
@@ -169,6 +170,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
       await refresh();
       setOpened(null);
       setView(next);
+      setFocused(false);
     } catch (error) {
       notify(errorMessage(error), true);
     } finally {
@@ -401,6 +403,14 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
         return;
       }
       if (view !== 'player' || !player.current) return;
+      if (key === 't' && !event.repeat) {
+        event.preventDefault();
+        setFocused((current) => !current);
+      }
+      if (event.key === 'Escape' && focused) {
+        event.preventDefault();
+        setFocused(false);
+      }
       if (
         event.code === 'Space' &&
         !(event.target instanceof HTMLElement && event.target.closest('button'))
@@ -451,7 +461,7 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
         <LockKeyhole size={11} />
       </div>
       <div className="app-body">
-        <aside className="sidebar">
+        <aside className="sidebar" hidden={view === 'player' && focused}>
           <div className="brand">
             <div className="brand-icon">
               <Bookmark size={23} strokeWidth={1.4} />
@@ -511,6 +521,9 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
                   }
                   onClick={() => void openVideo(video)}
                   title={video.title}
+                  aria-current={
+                    activeVideo?.id === video.id && view === 'player' ? 'true' : undefined
+                  }
                 >
                   <Film size={15} />
                   <span>{video.title}</span>
@@ -566,49 +579,50 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
           </div>
         </aside>
         <main className="main-area">
-          <header className="topbar">
-            <div className="breadcrumb">
-              <span>ライブラリ</span>
-              <ChevronRight size={13} />
-              <strong>
-                {view === 'shelf'
-                  ? 'しおり棚'
-                  : view === 'videos'
-                    ? 'すべての動画'
-                    : view === 'recent'
-                      ? '最近見た動画'
-                      : '動画を再生'}
-              </strong>
-            </div>
-            <div className="topbar-actions">
-              <div className="search-field">
-                <Search size={16} />
-                <input
-                  ref={search}
-                  aria-label="しおり・動画を検索"
-                  placeholder="メモや動画を検索…"
-                  value={query}
-                  disabled={view === 'player'}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                {query ? (
-                  <IconButton label="検索をクリア" onClick={() => setQuery('')}>
-                    <X size={14} />
-                  </IconButton>
-                ) : (
-                  <kbd>⌘ K</kbd>
-                )}
+          {view !== 'player' && (
+            <header className="topbar">
+              <div className="breadcrumb">
+                <span>ライブラリ</span>
+                <ChevronRight size={13} />
+                <strong>
+                  {view === 'shelf'
+                    ? 'しおり棚'
+                    : view === 'videos'
+                      ? 'すべての動画'
+                      : view === 'recent'
+                        ? '最近見た動画'
+                        : '動画を再生'}
+                </strong>
               </div>
-              <Button
-                variant="primary"
-                onClick={() => void chooseImport()}
-                disabled={loading || !!busy || !!loadError}
-              >
-                <Plus size={16} />
-                {gateway.isNative ? '動画を追加' : 'デモを追加'}
-              </Button>
-            </div>
-          </header>
+              <div className="topbar-actions">
+                <div className="search-field">
+                  <Search size={16} />
+                  <input
+                    ref={search}
+                    aria-label="しおり・動画を検索"
+                    placeholder="メモや動画を検索…"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                  {query ? (
+                    <IconButton label="検索をクリア" onClick={() => setQuery('')}>
+                      <X size={14} />
+                    </IconButton>
+                  ) : (
+                    <kbd>⌘ K</kbd>
+                  )}
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={() => void chooseImport()}
+                  disabled={loading || !!busy || !!loadError}
+                >
+                  <Plus size={16} />
+                  {gateway.isNative ? '動画を追加' : 'デモを追加'}
+                </Button>
+              </div>
+            </header>
+          )}
           {warnings.length > 0 && (
             <details className="library-warning">
               <summary>
@@ -644,6 +658,8 @@ export function App({ gateway }: { gateway: LibraryGateway }) {
               gateway={gateway}
               initialSeconds={opened.initialSeconds}
               autoplay={opened.autoplay}
+              focused={focused}
+              onToggleFocus={() => setFocused((current) => !current)}
               onBack={() => void navigate('shelf')}
               onInfo={() => {
                 player.current?.pause();

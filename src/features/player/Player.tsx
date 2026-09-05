@@ -15,6 +15,8 @@ import {
   Gauge,
   Info,
   Maximize,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Play,
   RotateCcw,
@@ -55,6 +57,8 @@ interface Props {
   gateway: LibraryGateway;
   initialSeconds?: number;
   autoplay?: boolean;
+  focused: boolean;
+  onToggleFocus(): void;
   onBack(): void;
   onInfo(): void;
   onRelink(): void;
@@ -71,6 +75,8 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     gateway,
     initialSeconds,
     autoplay = false,
+    focused,
+    onToggleFocus,
     onBack,
     onInfo,
     onRelink,
@@ -306,20 +312,41 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
   return (
-    <div className="player-view">
+    <div className={`player-view ${focused ? 'is-focused' : ''}`}>
       <header className="player-heading">
         <div className="player-heading-main">
           <IconButton label="しおり棚に戻る" onClick={onBack}>
             <ArrowLeft size={19} />
           </IconButton>
           <div>
-            <span className="eyebrow">NOW WATCHING</span>
             <h1 title={entry.title}>{entry.title}</h1>
           </div>
         </div>
-        <IconButton label="動画の情報と保存場所" onClick={onInfo}>
-          <Info size={19} />
-        </IconButton>
+        <div className="player-heading-actions">
+          {focused && (
+            <IconButton
+              label="しおりを追加 (B)"
+              onClick={() => void addBookmark()}
+              disabled={!loaded || !!mediaError || capturing}
+            >
+              <BookmarkPlus size={18} />
+            </IconButton>
+          )}
+          <Button
+            variant="ghost"
+            className="focus-toggle"
+            title={focused ? '集中モードを終了 (T / Esc)' : '集中モード (T)'}
+            aria-pressed={focused}
+            onClick={onToggleFocus}
+          >
+            {focused ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+            <span>{focused ? '元の表示に戻す' : '集中モード'}</span>
+            <kbd>T</kbd>
+          </Button>
+          <IconButton label="動画の情報と保存場所" onClick={onInfo}>
+            <Info size={19} />
+          </IconButton>
+        </div>
       </header>
       <div className="player-columns">
         <section className="watch-area" aria-label="動画プレイヤー">
@@ -577,7 +604,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             </div>
           )}
         </section>
-        <aside className="bookmark-panel" aria-label="この動画のしおり">
+        <aside className="bookmark-panel" aria-label="この動画のしおり" hidden={focused}>
           <div className="bookmark-panel-heading">
             <h2>
               この動画のしおり <span>{marks.length}</span>

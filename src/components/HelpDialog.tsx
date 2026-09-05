@@ -25,6 +25,8 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
           ['しおりを追加', 'B'],
           ['再生位置の保存 / 再試行', '⌘ S'],
           ['フルスクリーン', 'F'],
+          ['集中モード / 元の表示に戻す', 'T'],
+          ['集中モードを終了', 'Esc'],
           ['この画面を開く', '?'],
         ].map(([label, key]) => (
           <div key={label}>
